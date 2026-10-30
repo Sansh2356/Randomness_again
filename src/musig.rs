@@ -190,7 +190,7 @@ impl Signer {
         Ok(Slot { seckey, pubkey, participants, plain: plain.serialize(), tweaked })
     }
 
-    pub fn script(&self, chain: u32, index: u32) -> Result<ScriptBuf, String> {
+    fn script(&self, chain: u32, index: u32) -> Result<ScriptBuf, String> {
         let slot = self.slot(chain, index)?;
         let internal = XOnlyPublicKey::from_slice(&slot.plain[1..]).map_err(err)?;
         Ok(ScriptBuf::new_p2tr(&self.secp, internal, None))
@@ -205,7 +205,7 @@ impl Signer {
     }
 
     fn slot_of(&self, script: &ScriptBuf) -> Result<Slot, String> {
-        let (chain, index) = self.scripts.get(script).ok_or("An input isn't from this wallet")?;
+        let (chain, index) = self.scripts.get(script).ok_or("An input isn't from this signer")?;
         self.slot(*chain, *index)
     }
 

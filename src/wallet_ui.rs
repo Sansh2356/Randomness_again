@@ -13,6 +13,7 @@ use penlock::Share;
 use slint_keyos_platform::slint::{self, Color, ComponentHandle, Model, ModelRc, VecModel};
 
 use crate::musig::{self, Review, Signer, Step};
+use crate::single::SeedSigner;
 use crate::{
     AddressChunk, AddressRow, AppState, AppWindow, Callbacks, PenlockScreen, PenlockState, QrKind, SendRow,
     ToastVariant, WalletState,
@@ -32,11 +33,14 @@ enum Wanted {
     Cosigner,
     Psbt,
     Share,
+    SeedPsbt,
 }
 
 struct Wallet {
     ui: slint::Weak<AppWindow>,
     signer: RefCell<Option<Signer>>,
+    // A seed rebuilt from two shares, spending its own coins. Dropped on leaving those screens.
+    seed: RefCell<Option<SeedSigner>>,
     wanted: Cell<Wanted>,
     // The transaction on the review screen, until it's approved or cancelled.
     reviewing: RefCell<Option<Psbt>>,
@@ -128,7 +132,7 @@ impl Wallet {
         }
     }
 
-    /// A wallet of one share's own key. It signs with a cosigner holding another share of the backup.
+    /// A signer of one share's own key. It signs with a cosigner holding another share of the backup.
     fn open_share(&self, text: &str) {
         // Line breaks may not survive being pasted: the header is four tokens, the rest are rows.
         let tokens: Vec<&str> = text.split_whitespace().collect();
@@ -200,7 +204,7 @@ impl Wallet {
                 s.set_input_title(
                     match wanted {
                         Wanted::Cosigner => "Add a cosigner",
-                        Wanted::Psbt => "Sign a transaction",
+                        Wanted::Psbt | Wanted::SeedPsbt => "Sign a transaction",
                         Wanted::Share => "Paste a share",
                     }
                     .into(),
@@ -213,7 +217,7 @@ impl Wallet {
     fn scan(&self) {
         let title = match self.wanted.get() {
             Wanted::Cosigner => "Add a cosigner",
-            Wanted::Psbt | Wanted::Share => "Sign a transaction",
+            Wanted::Psbt | Wanted::Share | Wanted::SeedPsbt => "Sign a transaction",
         };
         self.ui().global::<Callbacks>().invoke_scan_qr(title.into());
     }
@@ -222,6 +226,7 @@ impl Wallet {
         match self.wanted.get() {
             Wanted::Cosigner => self.add_cosigner(data),
             Wanted::Psbt => self.psbt(data),
+            Wanted::SeedPsbt => self.seed_psbt(data),
             Wanted::Share => self.open_share(&String::from_utf8_lossy(data)),
         }
     }
@@ -231,14 +236,14 @@ impl Wallet {
             .signer
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "The wallet is locked".to_string())
+            .ok_or_else(|| "The signer is locked".to_string())
             .and_then(|k| k.add_cosigner(&String::from_utf8_lossy(data)));
         self.screen(PenlockScreen::Wallet);
         self.refresh();
         match added {
             Ok(()) => {
                 let size = self.signer.borrow().as_ref().map_or(0, |k| k.cosigners()) + 1;
-                let detail = format!("This wallet is now {size}-of-{size}.");
+                let detail = format!("This signer is now {size}-of-{size}.");
                 self.toast_detail("Cosigner added", &detail, ToastVariant::Success);
             }
             Err(e) => self.toast(e, ToastVariant::Error),
@@ -249,7 +254,7 @@ impl Wallet {
         if let Err(e) = self.step(data) {
             self.screen(PenlockScreen::Wallet);
             let detail = if e == musig::NOT_A_PSBT {
-                "Export the transaction from your wallet app as a PSBT QR, then scan again."
+                "Export the transaction from your wallet as a PSBT QR, then scan again."
             } else {
                 ""
             };
@@ -260,7 +265,7 @@ impl Wallet {
     fn step(&self, data: &[u8]) -> Result<(), String> {
         let mut psbt = musig::parse_psbt(data)?;
         let mut guard = self.signer.borrow_mut();
-        let signer = guard.as_mut().ok_or("The wallet is locked")?;
+        let signer = guard.as_mut().ok_or("The signer is locked")?;
         match signer.inspect(&psbt)? {
             Step::Nonce(review) => {
                 drop(guard);
@@ -283,6 +288,50 @@ impl Wallet {
         Ok(())
     }
 
+    fn seed_psbt(&self, data: &[u8]) {
+        let reviewed = musig::parse_psbt(data).and_then(|psbt| {
+            let guard = self.seed.borrow();
+            let seed = guard.as_ref().ok_or("The seed is gone. Restore it again.")?;
+            seed.review(&psbt).map(|review| (psbt, review))
+        });
+        match reviewed {
+            Ok((psbt, review)) => {
+                self.show_review(review);
+                *self.reviewing.borrow_mut() = Some(psbt);
+            }
+            // A refused PSBT drops the seed too, so it's never left loaded behind a screen that can't clear it.
+            Err(e) => {
+                self.leave();
+                self.toast(e, ToastVariant::Error);
+            }
+        }
+    }
+
+    /// Sign with a phrase directly, for a PSBT from any wallet that holds the same seed.
+    fn open_seed(&self, phrase: &str) {
+        match SeedSigner::from_phrase(phrase, self.network()) {
+            Ok(seed) => {
+                *self.seed.borrow_mut() = Some(seed);
+                let ui = self.ui();
+                let penlock = ui.global::<PenlockState>();
+                penlock.set_phrase("".into());
+                penlock.set_words(ModelRc::default());
+                self.ask(Wanted::SeedPsbt);
+            }
+            Err(e) => self.toast(e, ToastVariant::Error),
+        }
+    }
+
+    /// Back from a signing screen, to the signer or, for a seed, out of it altogether.
+    fn leave(&self) {
+        *self.reviewing.borrow_mut() = None;
+        if self.seed.borrow_mut().take().is_some() {
+            self.screen(PenlockScreen::Home);
+        } else {
+            self.screen(PenlockScreen::Wallet);
+        }
+    }
+
     fn show_review(&self, review: Review) {
         let total = grouped(review.sends.iter().map(|(_, amount)| amount).sum());
         let rows: Vec<SendRow> = review
@@ -302,11 +351,25 @@ impl Wallet {
 
     fn approve(&self) {
         let Some(mut psbt) = self.reviewing.borrow_mut().take() else { return };
+        let signed = self.seed.borrow().as_ref().map(|seed| seed.sign(&mut psbt));
+        match signed {
+            Some(Ok(tx)) => {
+                let caption = "Scan this with a device that's online to broadcast the transaction.";
+                self.show_qr(QrKind::SingleTx, "Final transaction", caption, &tx);
+                return;
+            }
+            Some(Err(e)) => {
+                self.toast(e, ToastVariant::Error);
+                self.leave();
+                return;
+            }
+            None => {}
+        }
         let added = self
             .signer
             .borrow_mut()
             .as_mut()
-            .ok_or_else(|| "The wallet is locked".to_string())
+            .ok_or_else(|| "The signer is locked".to_string())
             .and_then(|k| k.add_nonces(&mut psbt));
         match added {
             Ok(()) => {
@@ -325,6 +388,7 @@ pub fn init(ui: &AppWindow) {
     let wallet = Rc::new(Wallet {
         ui: ui.as_weak(),
         signer: RefCell::default(),
+        seed: RefCell::default(),
         wanted: Cell::new(Wanted::Psbt),
         reviewing: RefCell::default(),
         address: Cell::new(0),
@@ -350,6 +414,17 @@ pub fn init(ui: &AppWindow) {
             let ui = w.ui();
             let words: Vec<String> = ui.global::<PenlockState>().get_words().iter().map(|w| w.to_string()).collect();
             w.open(&words.join(" "));
+        }
+    });
+    cb.on_seed_sign({
+        let w = wallet.clone();
+        move |phrase| {
+            if !phrase.is_empty() {
+                return w.open_seed(&phrase);
+            }
+            let ui = w.ui();
+            let words: Vec<String> = ui.global::<PenlockState>().get_words().iter().map(|w| w.to_string()).collect();
+            w.open_seed(&words.join(" "));
         }
     });
     cb.on_wallet_home({
@@ -413,14 +488,11 @@ pub fn init(ui: &AppWindow) {
     });
     cb.on_wallet_cancel({
         let w = wallet.clone();
-        move || {
-            *w.reviewing.borrow_mut() = None;
-            w.screen(PenlockScreen::Wallet);
-        }
+        move || w.leave()
     });
     cb.on_wallet_back({
         let w = wallet.clone();
-        move || w.screen(PenlockScreen::Wallet)
+        move || w.leave()
     });
 }
 

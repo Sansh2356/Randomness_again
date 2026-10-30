@@ -163,7 +163,7 @@ export component AppSettings inherits Screen {
                     }
 
                     Label {
-                        text: WalletState.mainnet ? "On. New wallets use real bitcoin." : "Off. New wallets use signet test coins.";
+                        text: WalletState.mainnet ? "On. New keys use real bitcoin." : "Off. New wallets use signet test coins.";
                     }
                 }
 
@@ -188,7 +188,7 @@ export component AppSettings inherits Screen {
         if WalletState.loaded: Note {
             icon: Icons.lock;
             tint: Prime.warning;
-            text: "Lock the wallet to change network. Each network has its own keys.";
+            text: "Lock the signer to change network. Each network has its own keys.";
         }
 
         if WalletState.mainnet: Note {
@@ -206,7 +206,7 @@ export component AppSettings inherits Screen {
 // Where the signing key comes from.
 export component WalletLoad inherits Screen {
     ScreenHeader {
-        title: "MuSig wallet";
+        title: "Sign a transaction";
         trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
         pill: true;
         pill-caution: WalletState.mainnet;
@@ -219,7 +219,7 @@ export component WalletLoad inherits Screen {
         spacing: 12px;
 
         Body {
-            text: "Choose what this Passport signs with. Your cosigners sign with theirs.";
+            text: "Choose what this Passport signs with. Your wallet builds the PSBT and broadcasts the result.";
         }
 
         Rectangle {
@@ -227,20 +227,29 @@ export component WalletLoad inherits Screen {
         }
 
         NavCard {
-            icon: Icons.one-share;
-            title: "Sign with one share";
-            subtitle: "Another device signs with another share";
+            icon: Icons.seed;
+            title: "Seed phrase";
+            subtitle: "Scan or type it, then import a PSBT";
             clicked => {
-                Callbacks.wallet-scan-share();
+                Callbacks.penlock-read-phrase();
             }
         }
 
         NavCard {
-            icon: Icons.seed;
-            title: "Sign with a seed phrase";
-            subtitle: "This phrase is one participant";
+            icon: Icons.shares;
+            title: "Two Penlock shares";
+            subtitle: "Rebuild the seed, then import a PSBT";
             clicked => {
-                Callbacks.penlock-create();
+                Callbacks.penlock-scan();
+            }
+        }
+
+        NavCard {
+            icon: Icons.one-share;
+            title: "One Penlock share";
+            subtitle: "Another device signs with another share";
+            clicked => {
+                Callbacks.wallet-scan-share();
             }
         }
 
@@ -328,7 +337,7 @@ export component WalletHome inherits Screen {
     property <bool> ready: WalletState.cosigners > 0;
 
     ScreenHeader {
-        title: "MuSig wallet";
+        title: "MuSig signer";
         trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
         pill: true;
         pill-caution: WalletState.mainnet;
@@ -437,7 +446,7 @@ export component WalletHome inherits Screen {
     Footer {
         Action {
             kind: ActionKind.secondary;
-            text: "Lock wallet";
+            text: "Lock signer";
             has-icon: true;
             icon: Icons.lock-wallet;
             clicked => {
@@ -506,6 +515,8 @@ component Step {
 export component WalletQr inherits Screen {
     property <QrKind> kind: WalletState.qr-kind;
     property <bool> signing: root.kind != QrKind.key && root.kind != QrKind.address;
+    // A rebuilt seed signs alone, so there are no rounds to show.
+    property <bool> stepped: root.signing && root.kind != QrKind.single-tx;
     property <length> code-size: root.kind == QrKind.key ? 320px : root.kind == QrKind.address ? 296px : 304px;
 
     ScreenHeader {
@@ -517,7 +528,7 @@ export component WalletQr inherits Screen {
     }
 
     Content {
-        if root.signing: HorizontalLayout {
+        if root.stepped: HorizontalLayout {
             spacing: 8px;
 
             Step {
@@ -541,7 +552,7 @@ export component WalletQr inherits Screen {
             }
         }
 
-        if root.signing: Rectangle {
+        if root.stepped: Rectangle {
             height: 16px;
         }
 
@@ -604,7 +615,7 @@ export component WalletQr inherits Screen {
 
             Eyebrow {
                 text: root.kind == QrKind.nonces ? "ROUND 1 OF 2" : root.kind == QrKind.partial ? "PARTIAL SIGNATURE" : "FULLY SIGNED";
-                color: root.kind == QrKind.final-tx ? Prime.success : Prime.copper;
+                color: root.kind == QrKind.final-tx || root.kind == QrKind.single-tx ? Prime.success : Prime.copper;
             }
 
             Body {
@@ -825,7 +836,7 @@ export component WalletReview inherits Screen {
 
                     VerticalLayout {
                         ReviewRow {
-                            label: "Change, back to this wallet";
+                            label: "Change, back to you";
                             amount: "\{WalletState.change} sats";
                         }
 
@@ -857,7 +868,7 @@ export component WalletReview inherits Screen {
         SlideToConfirm {
             height: 64px;
             thumb-width: 54px;
-            hint: WalletState.mainnet ? "Slide to send real bitcoin" : "Slide to approve";
+            hint: WalletState.mainnet ? "Slide to sign real bitcoin" : "Slide to approve";
             label: "";
             confirmed-label: "";
             control-height: 64px;

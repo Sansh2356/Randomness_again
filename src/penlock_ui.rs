@@ -609,7 +609,10 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     });
     cb.on_scan_qr_cancel({
         let p = penlock.clone();
-        move || p.open(PenlockScreen::Wallet)
+        move || {
+            p.open(PenlockScreen::Wallet);
+            p.ui().global::<Callbacks>().invoke_wallet_back();
+        }
     });
     cb.on_wallet_scan_share({
         let p = penlock.clone();

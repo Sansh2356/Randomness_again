@@ -14,9 +14,11 @@
 //
 //   add <passport tpub>
 //   address <index>                 the shared signet address, as the Passport shows it
-//   script <chain> <index>          its output script, hex
-//   new <txid> <vout> <sats> <index> <to script hex> <send sats> <fee sats>
 //   <any PSBT>                      take the next step, approving automatically
+//
+// It only signs. A PSBT comes from whatever wallet or coordinator built it. To read a transaction:
+//
+//   cargo run -- decode <transaction hex>
 //
 // Use throwaway phrases and shares. This is for testing and hasn't been audited.
 
@@ -25,13 +27,9 @@ mod musig;
 
 use std::io::BufRead;
 use std::path::Path;
-use std::str::FromStr;
 
-use bitcoin::absolute::LockTime;
-use bitcoin::psbt::Psbt;
-use bitcoin::transaction::Version;
-use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
-use musig::{Signer, Step, CHANGE};
+use bitcoin::{Network, Transaction};
+use musig::{Signer, Step};
 use penlock::word::{Word, WORD_LEN};
 use penlock::{Share, ShareCount, ShareIndex, Symbol};
 use rand_core::{CryptoRng, RngCore};
@@ -45,6 +43,27 @@ impl RngCore for OsRng {
 }
 
 impl CryptoRng for OsRng {}
+
+fn network() -> Network {
+    match std::env::var("COSIGNER_NETWORK").as_deref() {
+        Ok("mainnet") => Network::Bitcoin,
+        _ => Network::Signet,
+    }
+}
+
+fn decode(hex: &str) -> Result<(), String> {
+    let tx: Transaction = bitcoin::consensus::encode::deserialize_hex(hex).map_err(|e| e.to_string())?;
+    println!("txid {}", tx.compute_txid());
+    println!("size {} bytes, {} vbytes", tx.total_size(), tx.vsize());
+    for input in &tx.input {
+        println!("in  {} witness items {}", input.previous_output, input.witness.len());
+    }
+    for out in &tx.output {
+        let to = bitcoin::Address::from_script(&out.script_pubkey, network()).map_err(|e| e.to_string())?;
+        println!("out {} sats to {to}", out.value.to_sat());
+    }
+    Ok(())
+}
 
 fn share_text(share: &Share) -> String {
     let rows: Vec<String> =
@@ -81,10 +100,7 @@ fn share_from_file(path: &str) -> Share {
 }
 
 fn signer_from_env() -> Signer {
-    let network = match std::env::var("COSIGNER_NETWORK").as_deref() {
-        Ok("mainnet") => Network::Bitcoin,
-        _ => Network::Signet,
-    };
+    let network = network();
     if let Ok(text) = std::env::var("COSIGNER_SHARE") {
         let share = Share::parse(&text, None).expect("a share");
         let symbols: String = text.lines().skip(1).map(str::trim).collect();
@@ -92,30 +108,6 @@ fn signer_from_env() -> Signer {
     }
     let phrase = std::env::var("COSIGNER_PHRASE").expect("set COSIGNER_SHARE or COSIGNER_PHRASE");
     Signer::from_phrase(&phrase, network).expect("a valid phrase")
-}
-
-fn new_psbt(signer: &Signer, args: &[&str]) -> Result<Psbt, String> {
-    let [txid, vout, sats, index, to, send, fee] = args else {
-        return Err("new <txid> <vout> <sats> <index> <to script hex> <send sats> <fee sats>".into());
-    };
-    let number = |s: &str| s.parse::<u64>().map_err(|e| e.to_string());
-    let (spent, send, fee) = (number(sats)?, number(send)?, number(fee)?);
-    let change = spent.checked_sub(send + fee).ok_or("not enough to spend")?;
-    let input = TxIn {
-        previous_output: OutPoint { txid: Txid::from_str(txid).map_err(|e| e.to_string())?, vout: number(vout)? as u32 },
-        sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-        ..Default::default()
-    };
-    let to = ScriptBuf::from_hex(to).map_err(|e| e.to_string())?;
-    let output = vec![
-        TxOut { value: Amount::from_sat(send), script_pubkey: to },
-        TxOut { value: Amount::from_sat(change), script_pubkey: signer.script(CHANGE, 0)? },
-    ];
-    let tx = Transaction { version: Version::TWO, lock_time: LockTime::ZERO, input: vec![input], output };
-    let mut psbt = Psbt::from_unsigned_tx(tx).map_err(|e| e.to_string())?;
-    let script_pubkey = signer.script(musig::RECEIVE, number(index)? as u32)?;
-    psbt.inputs[0].witness_utxo = Some(TxOut { value: Amount::from_sat(spent), script_pubkey });
-    Ok(psbt)
 }
 
 fn step(signer: &mut Signer, text: &str) -> Result<String, String> {
@@ -136,11 +128,6 @@ fn run(signer: &mut Signer, line: &str) -> Result<String, String> {
     match words.as_slice() {
         ["add", key] => signer.add_cosigner(key).map(|()| "ok".into()),
         ["address", index] => signer.address(musig::RECEIVE, index.parse().map_err(|_| "bad index")?),
-        ["script", chain, index] => {
-            let (chain, index) = (chain.parse().map_err(|_| "bad chain")?, index.parse().map_err(|_| "bad index")?);
-            Ok(signer.script(chain, index)?.to_hex_string())
-        }
-        ["new", args @ ..] => Ok(new_psbt(signer, args)?.to_string()),
         [psbt] => step(signer, psbt),
         _ => Err("unknown command".into()),
     }
@@ -154,6 +141,12 @@ fn main() {
             let target = number.parse().ok().and_then(ShareIndex::new).expect("a share number");
             let rebuilt = rebuild(&share_from_file(a), &share_from_file(b), target).expect("two different shares");
             return println!("{}", share_text(&rebuilt));
+        }
+        ["decode", hex] => {
+            if let Err(e) = decode(hex) {
+                println!("error: {e}");
+            }
+            return;
         }
         _ => {}
     }

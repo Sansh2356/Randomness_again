@@ -203,8 +203,8 @@ export component PenlockHome inherits Screen {
         NavCard {
             icon: Icons.key;
             number: "04";
-            title: "MuSig wallet";
-            subtitle: WalletState.loaded ? "Key \{WalletState.fingerprint} · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}" : "Sign transactions with cosigners";
+            title: "Sign a transaction";
+            subtitle: WalletState.loaded ? "Key \{WalletState.fingerprint} · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}" : "With a seed phrase or Penlock shares";
             accent: WalletState.loaded;
             open: WalletState.loaded;
             clicked => {
@@ -264,7 +264,7 @@ component WordChip {
 
 export component EnterPhrase inherits Screen {
     ScreenHeader {
-        title: "Create shares";
+        title: "Seed phrase";
         back => {
             Callbacks.penlock-close();
         }
@@ -427,7 +427,16 @@ export component EnterPhrase inherits Screen {
 
         Action {
             kind: ActionKind.secondary;
-            text: "Open wallet";
+            text: "Sign a transaction";
+            disabled: PenlockState.phrase-status != PhraseStatus.valid;
+            clicked => {
+                Callbacks.seed-sign(phrase.value);
+            }
+        }
+
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Sign with cosigners";
             disabled: PenlockState.phrase-status != PhraseStatus.valid;
             clicked => {
                 Callbacks.open-wallet(phrase.value);
@@ -1121,7 +1130,7 @@ export component ScanShares inherits Rectangle {
         }
 
         if root.phrase && PenlockState.scan-error == "" && PenlockState.draft-ready: Label {
-            text: "Next, check every word against your paper before you make shares.";
+            text: "Next, check every word against your paper before you use them.";
         }
 
         Rectangle {
@@ -1465,17 +1474,25 @@ export component Recovered inherits Screen {
 
     Footer {
         Action {
-            text: "Done";
+            text: "Sign a transaction";
             clicked => {
-                Callbacks.penlock-close();
+                Callbacks.seed-sign("");
             }
         }
 
         Action {
             kind: ActionKind.secondary;
-            text: "Open wallet";
+            text: "Sign with cosigners";
             clicked => {
                 Callbacks.wallet-from-recovered();
+            }
+        }
+
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Done";
+            clicked => {
+                Callbacks.penlock-close();
             }
         }
     }

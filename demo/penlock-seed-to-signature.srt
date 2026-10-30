@@ -1,0 +1,44 @@
+1
+00:00:03,500 --> 00:00:09,065
+Penlock on Passport Prime, running in the KeyOS simulator.
+
+2
+00:00:09,065 --> 00:00:13,553
+Every launch opens with a warning about protecting your seed.
+
+3
+00:00:13,553 --> 00:00:22,245
+Mainnet is a deliberate choice in Settings. This is a small test wallet.
+
+4
+00:00:22,245 --> 00:00:34,323
+Import: the seed is uploaded as a photo and read on the device.
+
+5
+00:00:34,323 --> 00:00:37,872
+It reads all 12 words. Words and shares stay hidden in this recording.
+
+6
+00:00:37,872 --> 00:00:41,563
+The seed becomes three paper shares. Any two can rebuild it.
+
+7
+00:00:41,563 --> 00:00:52,060
+Two shares are saved as images. The second save warns you first.
+
+8
+00:00:52,060 --> 00:01:03,913
+Now restore with share 3, then share 1. Any two work, in any order.
+
+9
+00:01:03,913 --> 00:01:08,595
+Recovered from two shares. The phrase stays hidden.
+
+10
+00:01:08,595 --> 00:01:15,872
+Spending 999 sats from this seed. You approve the destination, change and fee here.
+
+11
+00:01:15,872 --> 00:01:20,398
+Signed by the seed that two shares rebuilt. Ready to broadcast.
+

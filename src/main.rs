@@ -5,6 +5,7 @@ mod backup;
 mod musig;
 mod penlock_ui;
 mod scan;
+mod single;
 mod theme;
 mod wallet_ui;
 

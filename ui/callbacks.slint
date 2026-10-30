@@ -100,7 +100,7 @@ export struct SendRow {
     amount: string,
 }
 
-export enum QrKind { key, address, nonces, partial, final-tx }
+export enum QrKind { key, address, nonces, partial, final-tx, single-tx }
 
 export global WalletState {
     // Which network a new wallet uses. Mainnet is only ever a confirmed choice.
@@ -156,6 +156,8 @@ export global Callbacks {
     callback wallet-paste-share();
     callback wallet-scan-share();
     callback wallet-from-recovered();
+    // Empty signs with the phrase two shares just rebuilt.
+    callback seed-sign(string);
     callback wallet-home();
     callback wallet-lock();
     callback wallet-show-key();
