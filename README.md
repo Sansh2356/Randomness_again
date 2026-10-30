@@ -12,16 +12,17 @@ Paper seed backups and an offline transaction signer for [Passport Prime](https:
 
 Screenshots use a public test phrase.
 
-A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), with captions in
-[`demo/penlock-demo.srt`](demo/penlock-demo.srt).
+A 4-minute walkthrough of every feature, on signet, is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), with captions
+in [`demo/penlock-demo.srt`](demo/penlock-demo.srt).
 
-[`demo/penlock-seed-to-signature.mp4`](demo/penlock-seed-to-signature.mp4) follows one seed from a photo to shares, back
-through two shares, to a signed mainnet transaction. Its seed and shares are hidden.
+[`demo/penlock-seed-to-signature.mp4`](demo/penlock-seed-to-signature.mp4) is an earlier recording on the previous screens.
+It follows one seed from a photo to shares, back through two shares, to a signed mainnet transaction. Its seed and shares
+are hidden.
 
 ## What it does
 
 - **Create shares.** Split a 12- or 24-word phrase into three paper shares. Any two rebuild it, and one alone reveals
-  nothing. Tap a share to see all its rows at once, or save a 12-word share as a PNG that Upload photo can read back.
+  nothing. See all rows shows a whole share at once, or save a 12-word share as a PNG that Upload photo can read back.
   Saved shares go in a `penlock` folder, named with the share number and the date and time in UTC.
 - **Restore from shares.** Tap a share to upload a strip, or take a photo. Any two strips rebuild the phrase, in any order.
 - **Read a written phrase.** Take or upload a photo of a handwritten phrase, then check every word of the draft against

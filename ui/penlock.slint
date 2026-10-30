@@ -124,7 +124,7 @@ export component SettingsButton {
 export component PenlockHome inherits Screen {
     VerticalLayout {
         vertical-stretch: 1;
-        padding-top: 32px;
+        padding-top: 40px;
         padding-left: Prime.gutter;
         padding-right: Prime.gutter;
         padding-bottom: 24px;
@@ -150,7 +150,7 @@ export component PenlockHome inherits Screen {
         }
 
         Rectangle {
-            height: 24px;
+            height: 32px;
         }
 
         VerticalLayout {
@@ -158,7 +158,6 @@ export component PenlockHome inherits Screen {
 
             NavCard {
                 icon: Icons.shares;
-                number: "01";
                 title: "Create shares";
                 subtitle: "Split a 12- or 24-word phrase";
                 accent: !WalletState.loaded;
@@ -169,7 +168,6 @@ export component PenlockHome inherits Screen {
 
             NavCard {
                 icon: Icons.refresh;
-                number: "02";
                 title: "Restore from shares";
                 subtitle: "Scan any two strips with the camera";
                 clicked => {
@@ -179,7 +177,6 @@ export component PenlockHome inherits Screen {
 
             NavCard {
                 icon: Icons.scan-text;
-                number: "03";
                 title: "Read a written phrase";
                 subtitle: "Scan your seed phrase off paper";
                 clicked => {
@@ -189,7 +186,7 @@ export component PenlockHome inherits Screen {
         }
 
         Rectangle {
-            height: 24px;
+            height: 32px;
         }
 
         Eyebrow {
@@ -202,11 +199,10 @@ export component PenlockHome inherits Screen {
 
         NavCard {
             icon: Icons.key;
-            number: "04";
             title: "Sign a transaction";
-            subtitle: WalletState.loaded ? "Key \{WalletState.fingerprint} · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}" : "With a seed phrase or Penlock shares";
+            subtitle: "With a seed phrase or Penlock shares";
             accent: WalletState.loaded;
-            open: WalletState.loaded;
+            open-key: WalletState.loaded ? WalletState.fingerprint : "";
             clicked => {
                 if WalletState.loaded {
                     Callbacks.wallet-home();
@@ -222,6 +218,7 @@ export component PenlockHome inherits Screen {
     }
 }
 
+// One numbered word on a ruled line, with the line itself marking a bad one.
 component WordChip {
     in property <int> number;
     in property <string> word;
@@ -229,16 +226,13 @@ component WordChip {
     height: 32px;
 
     Rectangle {
-        border-radius: 8px;
-        background: root.bad ? Prime.danger-soft : root.word != "" ? Prime.surface-raised : transparent;
-        border-width: 1px;
-        border-color: root.bad ? Prime.danger : Prime.line;
+        y: 0;
+        height: root.bad ? 2px : 1px;
+        background: root.bad ? Prime.danger : root.word != "" ? Prime.line-strong : Prime.line;
     }
 
     HorizontalLayout {
-        padding-left: 10px;
-        padding-right: 8px;
-        spacing: 6px;
+        spacing: 8px;
 
         Text {
             width: 18px;
@@ -259,6 +253,16 @@ component WordChip {
             vertical-alignment: center;
             overflow: elide;
         }
+
+        if root.bad: VerticalLayout {
+            alignment: center;
+
+            Icon {
+                source: Icons.alert;
+                tint: Prime.danger;
+                size: 14px;
+            }
+        }
     }
 }
 
@@ -274,28 +278,44 @@ export component EnterPhrase inherits Screen {
         spacing: 8px;
 
         if PenlockState.phrase-note != "": Rectangle {
-            border-radius: 12px;
-            background: Prime.surface-raised;
-            border-width: 1px;
-            border-color: Prime.line;
             height: read-note.preferred-height;
 
-            read-note := VerticalLayout {
+            Rectangle {
+                y: 0;
+                height: 2px;
+                background: Prime.warning;
+            }
+
+            Rectangle {
+                y: parent.height - 1px;
+                height: 1px;
+                background: Prime.line;
+            }
+
+            read-note := HorizontalLayout {
                 padding-top: 12px;
                 padding-bottom: 12px;
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 2px;
+                spacing: 12px;
 
-                Label {
-                    text: "Read from paper.";
-                    color: Prime.warning;
-                    font-weight: 600;
+                Icon {
+                    source: Icons.alert;
+                    tint: Prime.warning;
+                    size: 20px;
                 }
 
-                Label {
-                    text: PenlockState.phrase-note;
-                    color: Prime.ink;
+                VerticalLayout {
+                    horizontal-stretch: 1;
+
+                    Label {
+                        text: "Read from paper.";
+                        color: Prime.warning;
+                        font-weight: 600;
+                    }
+
+                    Label {
+                        text: PenlockState.phrase-note;
+                        color: Prime.ink;
+                    }
                 }
             }
         }
@@ -363,33 +383,27 @@ export component EnterPhrase inherits Screen {
             }
         }
 
-        if PenlockState.phrase-count == 0: Rectangle {
+        Rectangle {
+            height: 8px;
+        }
+
+        // Numbered lines wait for the words, so the layout doesn't move as they arrive.
+        if PenlockState.phrase-count == 0: VerticalLayout {
             vertical-stretch: 1;
-            min-height: 96px;
-            border-radius: 12px;
-            border-width: 1px;
-            border-color: Prime.line-strong;
+            alignment: start;
+            spacing: 4px;
 
-            VerticalLayout {
-                alignment: center;
-                padding-left: 32px;
-                padding-right: 32px;
-                spacing: 8px;
+            for r in 4: HorizontalLayout {
+                spacing: 16px;
 
-                HorizontalLayout {
-                    alignment: center;
-
-                    Icon {
-                        source: Icons.grid;
-                        tint: Prime.ink-faint;
-                    }
+                for c in 3: WordChip {
+                    width: (root.width - 2 * Prime.gutter - 32px) / 3;
+                    number: r * 3 + c + 1;
                 }
+            }
 
-                Label {
-                    text: "Your words appear here, numbered, so you can check each one against your paper.";
-                    color: Prime.ink-faint;
-                    horizontal-alignment: center;
-                }
+            Caption {
+                text: "Your words appear here, numbered, so you can check each one against your paper.";
             }
         }
 
@@ -399,13 +413,13 @@ export component EnterPhrase inherits Screen {
 
             chips := VerticalLayout {
                 alignment: start;
-                spacing: 8px;
+                spacing: 4px;
 
                 for row in PenlockState.chip-rows: HorizontalLayout {
-                    spacing: 8px;
+                    spacing: 16px;
 
                     for chip in row.chips: WordChip {
-                        width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                        width: (root.width - 2 * Prime.gutter - 32px) / 3;
                         number: chip.number;
                         word: chip.word;
                         bad: chip.bad;
@@ -667,7 +681,7 @@ component ShareTab {
 
                 Icon {
                     source: Icons.check;
-                    tint: root.selected ? Prime.copper-ink : Prime.ink-muted;
+                    tint: root.selected ? Prime.copper-ink : Prime.success;
                     size: 14px;
                 }
             }
@@ -692,25 +706,20 @@ component ShareTab {
 
 export component ShareSheets inherits Screen {
     property <int> tab: 0;
-    property <bool> seen-2;
-    property <bool> seen-3;
-    property <bool> all-seen: root.seen-2 && root.seen-3;
-    property <int> seen-count: 1 + (root.seen-2 ? 1 : 0) + (root.seen-3 ? 1 : 0);
+    property <[bool]> copied: [false, false, false];
+    property <int> copied-count: (root.copied[0] ? 1 : 0) + (root.copied[1] ? 1 : 0) + (root.copied[2] ? 1 : 0);
+    // Marking this share copied finishes the job.
+    property <bool> finishing: root.copied-count + (root.copied[root.tab] ? 0 : 1) == 3;
 
-    function open(index: int) {
-        root.tab = index;
-        if index == 1 {
-            root.seen-2 = true;
-        }
-        if index == 2 {
-            root.seen-3 = true;
-        }
+    // The next share still to copy, after this one.
+    function next() -> int {
+        return root.copied[mod(root.tab + 1, 3)] ? mod(root.tab + 2, 3) : mod(root.tab + 1, 3);
     }
 
     ScreenHeader {
         title: "Your shares";
-        trailing: "\{root.seen-count} / 3 viewed";
-        done: root.all-seen;
+        trailing: "\{root.copied-count} / 3 copied";
+        done: root.copied-count == 3;
         back => {
             Callbacks.penlock-close();
         }
@@ -732,9 +741,9 @@ export component ShareSheets inherits Screen {
                     width: (root.width - 2 * Prime.gutter - 16px) / 3;
                     text: "Share 1";
                     selected: root.tab == 0;
-                    viewed: true;
+                    viewed: root.copied[0];
                     clicked => {
-                        root.open(0);
+                        root.tab = 0;
                     }
                 }
 
@@ -742,9 +751,9 @@ export component ShareSheets inherits Screen {
                     width: (root.width - 2 * Prime.gutter - 16px) / 3;
                     text: "Share 2";
                     selected: root.tab == 1;
-                    viewed: root.seen-2;
+                    viewed: root.copied[1];
                     clicked => {
-                        root.open(1);
+                        root.tab = 1;
                     }
                 }
 
@@ -752,9 +761,9 @@ export component ShareSheets inherits Screen {
                     width: (root.width - 2 * Prime.gutter - 16px) / 3;
                     text: "Share 3";
                     selected: root.tab == 2;
-                    viewed: root.seen-3;
+                    viewed: root.copied[2];
                     clicked => {
-                        root.open(2);
+                        root.tab = 2;
                     }
                 }
             }
@@ -799,15 +808,16 @@ export component ShareSheets inherits Screen {
         }
 
         Rectangle {
-            height: 12px;
+            height: 16px;
+        }
+
+        Rectangle {
+            height: 1px;
+            background: Prime.line;
         }
 
         Rectangle {
             vertical-stretch: 1;
-            border-radius: 12px;
-            background: Prime.surface-raised;
-            border-width: 1px;
-            border-color: Prime.line;
             clip: true;
 
             Flickable {
@@ -826,11 +836,12 @@ export component ShareSheets inherits Screen {
         }
 
         Rectangle {
-            height: 8px;
+            height: 1px;
+            background: Prime.line;
         }
 
         Rectangle {
-            height: 32px;
+            height: 40px;
 
             HorizontalLayout {
                 alignment: center;
@@ -867,15 +878,15 @@ export component ShareSheets inherits Screen {
         spacing: 8px;
 
         Action {
-            text: root.all-seen ? "I've copied all three" : "Next: share \{root.seen-2 ? 3 : 2}";
-            has-icon: !root.all-seen;
-            icon-after: true;
-            icon: Icons.arrow-right;
+            text: root.finishing ? "I've copied all three" : "I've copied share \{root.tab + 1}";
+            has-icon: true;
+            icon: Icons.check;
             clicked => {
-                if root.all-seen {
+                if root.finishing {
                     Callbacks.penlock-close();
                 } else {
-                    root.open(root.seen-2 ? 2 : 1);
+                    root.copied[root.tab] = true;
+                    root.tab = root.next();
                 }
             }
         }
@@ -926,19 +937,18 @@ component ShareTile {
     in property <bool> read;
     in property <bool> disabled;
     callback clicked();
-    height: 64px;
+    height: 48px;
     opacity: root.disabled ? 0.4 : 1;
 
     Rectangle {
-        border-radius: 12px;
-        background: root.read ? Prime.success-soft : transparent;
-        border-width: 1px;
-        border-color: root.read ? Prime.success : Prime.line-strong;
+        y: 0;
+        height: 2px;
+        background: root.read ? Prime.success : Prime.line-strong;
     }
 
     VerticalLayout {
-        alignment: center;
-        padding-left: 12px;
+        alignment: start;
+        padding-top: 10px;
         spacing: 2px;
 
         Text {
@@ -1093,10 +1103,10 @@ export component ScanShares inherits Rectangle {
         }
 
         if !root.phrase && !root.qr: HorizontalLayout {
-            spacing: 8px;
+            spacing: 16px;
 
             for i in 3: ShareTile {
-                width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                width: (root.width - 2 * Prime.gutter - 32px) / 3;
                 name: "Share \{i + 1}";
                 read: PenlockState.have[i];
                 disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
@@ -1204,12 +1214,16 @@ export component ScanShares inherits Rectangle {
 component RevealedWord {
     in property <int> number;
     in property <string> word;
-    height: 30px;
+    height: 32px;
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Prime.surface-raised;
+    }
 
     HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        spacing: 10px;
+        spacing: 12px;
 
         Text {
             width: 20px;
@@ -1217,7 +1231,6 @@ component RevealedWord {
             color: Prime.ink-faint;
             font-family: Prime.mono-font;
             font-size: 12px;
-            horizontal-alignment: right;
             vertical-alignment: center;
         }
 
@@ -1232,10 +1245,25 @@ component RevealedWord {
     }
 }
 
+// A hairline, then the space below it, opening a section.
+component SectionRule inherits VerticalLayout {
+    in property <length> below: 16px;
+
+    Rectangle {
+        height: 1px;
+        background: Prime.line;
+    }
+
+    Rectangle {
+        height: root.below;
+    }
+}
+
 export component Recovered inherits Screen {
     property <bool> revealed;
     property <int> half: floor((PenlockState.words.length + 1) / 2);
     property <bool> recheck: PenlockState.corrections.length > 0;
+    property <string> corrections: PenlockState.corrections[0] + (PenlockState.corrections.length > 1 ? "\n" + PenlockState.corrections[1] : "") + (PenlockState.corrections.length > 2 ? "\n…and \{PenlockState.corrections.length - 2} more" : "");
 
     ScreenHeader {
         title: "Phrase recovered";
@@ -1245,102 +1273,122 @@ export component Recovered inherits Screen {
     }
 
     Content {
-        Rectangle {
-            border-radius: 12px;
-            background: Prime.success-soft;
-            border-width: 1px;
-            border-color: Prime.success;
-            height: summary.preferred-height;
+        padding-top: root.revealed ? 16px : 24px;
 
-            summary := HorizontalLayout {
-                padding: root.revealed ? 12px : 16px;
-                spacing: 12px;
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
 
-                VerticalLayout {
-                    alignment: center;
+            VerticalLayout {
+                alignment: center;
 
-                    Rectangle {
-                        width: 40px;
-                        height: 40px;
-                        border-radius: 20px;
-                        border-width: 2px;
-                        border-color: Prime.success;
-
-                        Icon {
-                            source: Icons.check;
-                            tint: Prime.success;
-                            size: 20px;
-                        }
-                    }
+                Icon {
+                    source: Icons.check;
+                    tint: Prime.success;
+                    size: 14px;
                 }
+            }
 
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    spacing: 2px;
-
-                    if !root.revealed: Eyebrow {
-                        text: "RECOVERED";
-                        color: Prime.success;
-                    }
-
-                    Heading {
-                        text: root.revealed ? "\{PenlockState.words.length} words recovered" : "\{PenlockState.words.length} words";
-                        font-size: root.revealed ? 20px : 24px;
-                    }
-
-                    Label {
-                        text: PenlockState.result-subtitle;
-                    }
-                }
+            Eyebrow {
+                text: root.revealed ? "RECOVERED · \{PenlockState.words.length} WORDS" : "RECOVERED";
+                color: Prime.success;
             }
         }
 
-        if root.recheck: Rectangle {
-            height: 12px;
+        if !root.revealed: Rectangle {
+            height: 8px;
         }
 
-        if root.recheck: Rectangle {
-            border-radius: 12px;
-            background: Prime.surface-raised;
-            border-width: 1px;
-            border-color: Prime.line;
-            height: recheck-card.preferred-height;
+        if !root.revealed: Display {
+            text: "\{PenlockState.words.length} words";
+        }
 
-            recheck-card := HorizontalLayout {
-                padding-top: 12px;
-                padding-bottom: 12px;
-                padding-left: 16px;
-                padding-right: 16px;
-                spacing: 12px;
+        Rectangle {
+            height: root.revealed ? 4px : 8px;
+        }
+
+        Label {
+            text: PenlockState.result-subtitle;
+        }
+
+        Rectangle {
+            height: root.revealed ? 16px : 24px;
+        }
+
+        if root.recheck && !root.revealed: SectionRule { }
+
+        if root.recheck && !root.revealed: HorizontalLayout {
+            spacing: 6px;
+            alignment: start;
+
+            VerticalLayout {
+                alignment: center;
 
                 Icon {
                     source: Icons.alert;
                     tint: Prime.warning;
+                    size: 14px;
+                }
+            }
+
+            Eyebrow {
+                text: "RECHECK ON PAPER";
+                color: Prime.warning;
+            }
+        }
+
+        if root.recheck && !root.revealed: Rectangle {
+            height: 8px;
+        }
+
+        if root.recheck && !root.revealed: Body {
+            text: root.corrections;
+            color: Prime.ink;
+        }
+
+        if root.recheck && !root.revealed: Rectangle {
+            height: 24px;
+        }
+
+        if root.recheck && root.revealed: SectionRule {
+            below: 12px;
+        }
+
+        if root.recheck && root.revealed: HorizontalLayout {
+            spacing: 8px;
+
+            Icon {
+                source: Icons.alert;
+                tint: Prime.warning;
+                size: 16px;
+            }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                Label {
+                    text: "Recheck on paper:";
+                    color: Prime.warning;
+                    font-weight: 600;
                 }
 
-                VerticalLayout {
-                    horizontal-stretch: 1;
-                    spacing: 4px;
-
-                    Eyebrow {
-                        text: "RECHECK ON PAPER";
-                        color: Prime.warning;
-                    }
-
-                    Label {
-                        text: PenlockState.corrections[0] + (PenlockState.corrections.length > 1 ? "\n" + PenlockState.corrections[1] : "") + (PenlockState.corrections.length > 2 ? "\n…and \{PenlockState.corrections.length - 2} more" : "");
-                        color: Prime.ink;
-                    }
+                Label {
+                    text: root.corrections;
+                    color: Prime.ink;
                 }
             }
         }
 
-        Rectangle {
-            height: root.revealed ? 4px : 24px;
+        if root.recheck && root.revealed: Rectangle {
+            height: 12px;
+        }
+
+        SectionRule {
+            below: root.revealed ? 0 : 16px;
         }
 
         HorizontalLayout {
-            height: root.revealed ? 44px : 20px;
+            height: root.revealed ? 48px : 16px;
 
             Eyebrow {
                 horizontal-stretch: 1;
@@ -1348,24 +1396,10 @@ export component Recovered inherits Screen {
                 vertical-alignment: center;
             }
 
-            if !root.revealed: HorizontalLayout {
-                spacing: 6px;
-
-                VerticalLayout {
-                    alignment: center;
-
-                    Icon {
-                        source: Icons.eye-off;
-                        tint: Prime.ink-faint;
-                        size: 14px;
-                    }
-                }
-
-                Caption {
-                    text: "Hidden";
-                    vertical-alignment: center;
-                    wrap: no-wrap;
-                }
+            if !root.revealed: Caption {
+                text: "Hidden";
+                vertical-alignment: center;
+                wrap: no-wrap;
             }
 
             if root.revealed: Rectangle {
@@ -1403,7 +1437,7 @@ export component Recovered inherits Screen {
         }
 
         if !root.revealed: VerticalLayout {
-            padding-top: 12px;
+            padding-top: 16px;
             spacing: 8px;
 
             SlideToConfirm {
@@ -1428,13 +1462,12 @@ export component Recovered inherits Screen {
 
             Caption {
                 text: "Make sure no one can see your screen.";
-                horizontal-alignment: center;
             }
         }
 
         if root.revealed: Rectangle {
             vertical-stretch: 1;
-            border-radius: 12px;
+            border-radius: 8px;
             background: Prime.surface-sunken;
             clip: true;
 
@@ -1444,20 +1477,23 @@ export component Recovered inherits Screen {
                 // Column-major, like a recovery card: 1–6 on the left, 7–12 on the right.
                 word-list := VerticalLayout {
                     alignment: start;
-                    padding: 12px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    padding-left: 16px;
+                    padding-right: 16px;
                     spacing: 4px;
 
                     for r in root.half: HorizontalLayout {
-                        spacing: 12px;
+                        spacing: 24px;
 
                         RevealedWord {
-                            width: (root.width - 2 * Prime.gutter - 36px) / 2;
+                            width: (root.width - 2 * Prime.gutter - 56px) / 2;
                             number: r + 1;
                             word: PenlockState.words[r];
                         }
 
                         RevealedWord {
-                            width: (root.width - 2 * Prime.gutter - 36px) / 2;
+                            width: (root.width - 2 * Prime.gutter - 56px) / 2;
                             visible: r + root.half < PenlockState.words.length;
                             number: r + root.half + 1;
                             word: PenlockState.words[r + root.half];

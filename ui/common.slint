@@ -221,6 +221,9 @@ export component ScreenHeader {
     in property <bool> pill;
     // The tag warns rather than labels.
     in property <bool> pill-caution;
+    // Which network this screen's keys are on.
+    in property <string> network;
+    in property <bool> caution;
     callback back();
     height: 64px;
 
@@ -250,6 +253,12 @@ export component ScreenHeader {
             vertical-alignment: center;
             wrap: no-wrap;
             overflow: elide;
+        }
+
+        if root.network != "": Eyebrow {
+            text: root.network;
+            color: root.caution ? Prime.warning : Prime.copper;
+            vertical-alignment: center;
         }
 
         if root.pill && root.trailing != "": VerticalLayout {
@@ -386,46 +395,44 @@ export component IconTile {
     }
 }
 
-// A card that goes somewhere. One per screen may be the accent card.
+// A card that goes somewhere. One per screen may be the accent card, and the first in a list leads.
 export component NavCard {
     in property <image> icon;
-    in property <string> number;
     in property <string> title;
     in property <string> subtitle;
     in property <bool> accent;
-    in property <bool> open;
+    in property <bool> lead;
+    // A signer is open, under this key.
+    in property <string> open-key;
     in property <bool> test-only;
+    // The tighter size, for a screen that also carries a summary.
+    in property <bool> compact;
+    in property <bool> disabled;
     callback clicked();
 
-    min-height: row.preferred-height;
-
-    if root.accent: Rectangle {
-        x: -6px;
-        y: -6px;
-        width: parent.width + 12px;
-        height: parent.height + 12px;
-        border-radius: 18px;
-        background: Prime.copper.with-alpha(0.10);
-    }
+    min-height: root.compact ? 76px : 88px;
+    opacity: root.disabled ? 0.4 : 1;
 
     Rectangle {
         border-radius: 12px;
-        background: root.accent ? Prime.surface-accent : root.test-only ? transparent : Prime.surface-raised;
+        background: root.accent ? Prime.surface-accent : Prime.surface-raised;
         border-width: 1px;
-        border-color: root.accent ? Prime.line-accent : root.test-only ? Prime.line-strong : Prime.line;
+        border-color: root.accent ? Prime.line-accent : Prime.line;
     }
 
-    row := HorizontalLayout {
-        padding: 16px;
+    HorizontalLayout {
+        padding-top: root.compact ? 14px : 16px;
+        padding-bottom: root.compact ? 14px : 16px;
+        padding-left: 16px;
+        padding-right: 16px;
         spacing: 16px;
 
         VerticalLayout {
             alignment: center;
 
             IconTile {
+                size: root.compact ? 40px : 48px;
                 icon: root.icon;
-                tint: root.test-only ? Prime.ink-muted : Prime.copper-ink;
-                fill: root.test-only ? Prime.surface-raised : Prime.copper-soft;
             }
         }
 
@@ -434,58 +441,70 @@ export component NavCard {
             alignment: center;
             spacing: 2px;
 
-            if root.number != "": HorizontalLayout {
-                spacing: 8px;
-                alignment: start;
-
-                Eyebrow {
-                    text: root.number;
-                    vertical-alignment: center;
-                }
-
-                if root.open: Pill {
-                    height: 20px;
-                    text: "Open";
-                    tint: Prime.success;
-                    fill: Prime.success-soft;
-                    has-icon: true;
-                    icon: Icons.check;
-                }
-            }
-
             Heading {
                 text: root.title;
             }
 
-            if root.test-only: HorizontalLayout {
-                alignment: start;
+            if root.test-only: Label {
+                text: "Simulator only";
+                color: Prime.warning;
+                font-weight: 600;
+            }
 
-                Pill {
-                    text: "Simulator only";
-                    tint: Prime.warning;
-                    fill: transparent;
-                    stroke: Prime.line-strong;
+            if root.open-key != "": HorizontalLayout {
+                alignment: start;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    spacing: 4px;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        Icon {
+                            source: Icons.check;
+                            tint: Prime.success;
+                            size: 14px;
+                        }
+                    }
+
+                    Label {
+                        text: "Open";
+                        color: Prime.success;
+                        font-weight: 600;
+                        wrap: no-wrap;
+                    }
+                }
+
+                Label {
+                    text: "Key";
+                    wrap: no-wrap;
+                }
+
+                Code {
+                    text: root.open-key;
                 }
             }
 
-            if !root.test-only: Label {
+            if !root.test-only && root.open-key == "": Label {
                 text: root.subtitle;
                 wrap: no-wrap;
                 overflow: elide;
             }
         }
 
-        VerticalLayout {
+        if !root.disabled: VerticalLayout {
             alignment: center;
 
             Icon {
                 source: Icons.chevron-right;
-                tint: root.accent ? Prime.copper-ink : Prime.ink-muted;
+                tint: root.accent ? Prime.copper-ink : root.lead ? Prime.copper : Prime.ink-muted;
             }
         }
     }
 
     TouchArea {
+        enabled: !root.disabled;
         clicked => {
             root.clicked();
         }

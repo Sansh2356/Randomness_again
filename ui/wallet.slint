@@ -12,6 +12,7 @@ import {
     Caption,
     Code,
     Content,
+    Display,
     Eyebrow,
     Footer,
     Heading,
@@ -163,7 +164,7 @@ export component AppSettings inherits Screen {
                     }
 
                     Label {
-                        text: WalletState.mainnet ? "On. New keys use real bitcoin." : "Off. New wallets use signet test coins.";
+                        text: WalletState.mainnet ? "On. New keys use real bitcoin." : "Off. New keys use signet test coins.";
                     }
                 }
 
@@ -207,9 +208,8 @@ export component AppSettings inherits Screen {
 export component WalletLoad inherits Screen {
     ScreenHeader {
         title: "Sign a transaction";
-        trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
-        pill: true;
-        pill-caution: WalletState.mainnet;
+        network: WalletState.mainnet ? "MAINNET" : "SIGNET";
+        caution: WalletState.mainnet;
         back => {
             Callbacks.penlock-close();
         }
@@ -227,6 +227,7 @@ export component WalletLoad inherits Screen {
         }
 
         NavCard {
+            lead: true;
             icon: Icons.seed;
             title: "Seed phrase";
             subtitle: "Scan or type it, then import a PSBT";
@@ -277,164 +278,113 @@ export component WalletLoad inherits Screen {
     }
 }
 
-component WalletTile {
-    in property <image> icon;
-    in property <string> title;
-    in property <string> subtitle;
-    in property <bool> disabled;
-    callback clicked();
-    height: 120px;
-    opacity: root.disabled ? 0.4 : 1;
-
-    Rectangle {
-        border-radius: 12px;
-        background: Prime.surface-raised;
-        border-width: 1px;
-        border-color: Prime.line;
-    }
-
-    VerticalLayout {
-        padding: 16px;
-
-        HorizontalLayout {
-            alignment: start;
-
-            IconTile {
-                size: 40px;
-                icon: root.icon;
-            }
-        }
-
-        Rectangle {
-            vertical-stretch: 1;
-        }
-
-        Text {
-            text: root.title;
-            color: Prime.ink;
-            font-family: Prime.text-font;
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        Caption {
-            text: root.subtitle;
-            color: Prime.ink-muted;
-            wrap: no-wrap;
-            overflow: elide;
-        }
-    }
-
-    TouchArea {
-        enabled: !root.disabled;
-        clicked => {
-            root.clicked();
-        }
-    }
-}
-
 export component WalletHome inherits Screen {
     property <bool> ready: WalletState.cosigners > 0;
 
     ScreenHeader {
         title: "MuSig signer";
-        trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
-        pill: true;
-        pill-caution: WalletState.mainnet;
+        network: WalletState.mainnet ? "MAINNET" : "SIGNET";
+        caution: WalletState.mainnet;
         back => {
             Callbacks.penlock-close();
         }
     }
 
     Content {
-        spacing: 16px;
+        padding-top: 24px;
+
+        Eyebrow {
+            text: "\{WalletState.source} · YOUR KEY";
+        }
 
         Rectangle {
-            border-radius: 12px;
-            background: Prime.surface-accent;
-            border-width: 1px;
-            border-color: Prime.line-accent;
-            height: summary.preferred-height;
+            height: 8px;
+        }
 
-            summary := VerticalLayout {
-                padding: 16px;
-                spacing: 4px;
+        Display {
+            text: root.ready ? "\{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1} MuSig2" : "No cosigners yet";
+        }
 
-                Eyebrow {
-                    text: "\{WalletState.source} · YOUR KEY";
-                }
+        Rectangle {
+            height: 8px;
+        }
 
-                Heading {
-                    text: root.ready ? "\{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1} MuSig2" : "No cosigners yet";
-                    color: Prime.copper-ink;
-                }
+        Label {
+            text: !root.ready ? "Check this key matches your setup." : WalletState.cosigners == 1 ? "You and 1 cosigner. Check this key matches your setup." : "You and \{WalletState.cosigners} cosigners. Check this key matches your setup.";
+        }
 
-                Label {
-                    text: !root.ready ? "Check this key matches your setup." : WalletState.cosigners == 1 ? "You and 1 cosigner. Check this key matches your setup." : "You and \{WalletState.cosigners} cosigners. Check this key matches your setup.";
-                }
+        Rectangle {
+            height: 16px;
+        }
 
-                Rectangle {
-                    height: 8px;
-                }
+        ValueWell {
+            label: "Fingerprint";
+            value: WalletState.fingerprint;
+        }
 
-                ValueWell {
-                    label: "Fingerprint";
-                    value: WalletState.fingerprint;
-                }
-            }
+        Rectangle {
+            height: 24px;
         }
 
         VerticalLayout {
-            spacing: 12px;
+            spacing: 10px;
 
-            HorizontalLayout {
-                spacing: 12px;
-
-                WalletTile {
-                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
-                    icon: Icons.user;
-                    title: "Show my key";
-                    subtitle: "For your cosigners to add";
-                    clicked => {
-                        Callbacks.wallet-show-key();
-                    }
-                }
-
-                WalletTile {
-                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
-                    icon: Icons.user-plus;
-                    title: "Add a cosigner";
-                    subtitle: "Scan their account key";
-                    clicked => {
-                        Callbacks.wallet-add-cosigner();
-                    }
+            if root.ready: NavCard {
+                compact: true;
+                lead: true;
+                icon: Icons.sign;
+                title: "Sign a transaction";
+                subtitle: "Scan a PSBT";
+                clicked => {
+                    Callbacks.wallet-sign();
                 }
             }
 
-            HorizontalLayout {
-                spacing: 12px;
-
-                WalletTile {
-                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
-                    icon: Icons.receive;
-                    title: "Receive";
-                    subtitle: root.ready ? "Show a shared address" : "Add a cosigner first";
-                    disabled: !root.ready;
-                    clicked => {
-                        Callbacks.wallet-receive();
-                    }
+            if root.ready: NavCard {
+                compact: true;
+                icon: Icons.receive;
+                title: "Receive";
+                subtitle: "Show a shared address";
+                clicked => {
+                    Callbacks.wallet-receive();
                 }
+            }
 
-                WalletTile {
-                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
-                    icon: Icons.sign;
-                    title: "Sign a transaction";
-                    subtitle: root.ready ? "Scan a PSBT" : "Add a cosigner first";
-                    disabled: !root.ready;
-                    clicked => {
-                        Callbacks.wallet-sign();
-                    }
+            NavCard {
+                compact: true;
+                lead: !root.ready;
+                icon: Icons.user;
+                title: "Show my key";
+                subtitle: "For your cosigners to add";
+                clicked => {
+                    Callbacks.wallet-show-key();
                 }
+            }
+
+            NavCard {
+                compact: true;
+                icon: Icons.user-plus;
+                title: "Add a cosigner";
+                subtitle: "Scan their account key";
+                clicked => {
+                    Callbacks.wallet-add-cosigner();
+                }
+            }
+
+            if !root.ready: NavCard {
+                compact: true;
+                disabled: true;
+                icon: Icons.receive;
+                title: "Receive";
+                subtitle: "Add a cosigner first";
+            }
+
+            if !root.ready: NavCard {
+                compact: true;
+                disabled: true;
+                icon: Icons.sign;
+                title: "Sign a transaction";
+                subtitle: "Add a cosigner first";
             }
         }
 
