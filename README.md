@@ -6,6 +6,12 @@ Paper seed backups and multisig signing for [Passport Prime](https://foundation.
 > run in the KeyOS simulator, and coins in these wallets can only be spent with this code. The wallet defaults to signet;
 > mainnet is an opt-in setting.
 
+| Home | Your shares | MuSig wallet | Review |
+| --- | --- | --- | --- |
+| ![Home screen](docs/screenshots/home.png) | ![A Penlock share](docs/screenshots/shares.png) | ![MuSig wallet](docs/screenshots/wallet.png) | ![Reviewing a transaction](docs/screenshots/review.png) |
+
+Screenshots use a public test phrase.
+
 A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), with captions in
 [`demo/penlock-demo.srt`](demo/penlock-demo.srt).
 
@@ -13,8 +19,8 @@ A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), w
 
 - **Create shares.** Split a 12- or 24-word phrase into three paper shares. Any two rebuild it, and one alone reveals
   nothing.
-- **Restore from shares.** Scan two strips with the camera to rebuild the phrase.
-- **Read a written phrase.** Scan a handwritten phrase as a draft, then check every word against the paper.
+- **Restore from shares.** Photograph two strips to rebuild the phrase.
+- **Read a written phrase.** Take a photo of a handwritten phrase, then check every word of the draft against the paper.
 - **MuSig wallet.** Sign taproot transactions with cosigners, using MuSig2 over QR codes. A key can come from a seed
   phrase or from one share, so a Passport holding share 1 and another device holding share 2 can sign together without
   either seeing the other's share or the phrase.

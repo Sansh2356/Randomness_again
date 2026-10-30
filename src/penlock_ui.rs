@@ -43,6 +43,10 @@ struct Penlock {
     phrase_ready: Cell<bool>,
     qr_ready: Cell<bool>,
     source: Cell<Source>,
+    // A photo was asked for: the next camera frame goes to the phrase reader.
+    photo_wanted: Cell<bool>,
+    // The picture stays on the photo being read, or read, until a retake.
+    frozen: Cell<bool>,
     // The latest handwritten reading, until it's reviewed.
     draft: RefCell<Vec<String>>,
     // Best reading per share number: (index, cells, unread boxes).
@@ -80,8 +84,8 @@ impl Penlock {
 
     fn searching(&self) -> &'static str {
         match self.source.get() {
-            Source::Shares => "Looking for a share strip",
-            Source::Phrase => "Looking for written words",
+            Source::Shares => "Frame a strip, then take a photo",
+            Source::Phrase => "Frame your words, then take a photo",
             Source::Qr => "Looking for a QR code",
         }
     }
@@ -98,7 +102,10 @@ impl Penlock {
         self.scanned.borrow_mut().clear();
         self.draft.borrow_mut().clear();
         self.last_hit.set(None);
+        self.photo_wanted.set(false);
+        self.frozen.set(false);
         self.with_state(|s| {
+            s.set_photo_reading(false);
             s.set_phrase("".into());
             s.set_phrase_note("".into());
             s.set_draft_ready(false);
@@ -234,7 +241,7 @@ impl Penlock {
                     break;
                 }
                 let (rgb, preview) = scan::convert(frame.content().as_slice::<u8>());
-                if last_preview.is_none_or(|t| t.elapsed() >= PREVIEW_INTERVAL) {
+                if !this.frozen.get() && last_preview.is_none_or(|t| t.elapsed() >= PREVIEW_INTERVAL) {
                     last_preview = Some(Instant::now());
                     this.with_state(|s| {
                         s.set_camera_live(true);
@@ -243,7 +250,12 @@ impl Penlock {
                 }
                 let reader = this.reader(source);
                 if this.reader_ready(source).get() {
-                    reader.offer(rgb);
+                    // Paper is read from one steady photo, QR codes frame by frame.
+                    if source == Source::Qr {
+                        reader.offer(rgb);
+                    } else if this.photo_wanted.get() && reader.offer(rgb) {
+                        this.photo_wanted.set(false);
+                    }
                 }
                 while let Ok(event) = reader.events.try_recv() {
                     this.handle(event);
@@ -273,6 +285,17 @@ impl Penlock {
                     s.set_scan_failed(true);
                 });
             }
+            Event::Nothing if self.source.get() != Source::Qr => {
+                self.frozen.set(false);
+                let missing = if self.source.get() == Source::Phrase { "words" } else { "strip" };
+                self.with_state(|s| {
+                    s.set_photo_reading(false);
+                    s.set_scan_hit(false);
+                    s.set_scan_status(self.searching().into());
+                    s.set_scan_error(format!("No {missing} found in that photo. Try again with more light, and fill the frame.").into());
+                    s.set_scan_failed(true);
+                });
+            }
             Event::Nothing => {
                 if self.last_hit.get().is_none_or(|t| t.elapsed() >= HIT_HOLD) {
                     self.with_state(|s| {
@@ -291,6 +314,7 @@ impl Penlock {
                 *self.draft.borrow_mut() = words;
                 self.last_hit.set(Some(Instant::now()));
                 self.with_state(|s| {
+                    s.set_photo_reading(false);
                     s.set_draft_ready(true);
                     s.set_draft_complete(checksum && backup::LENGTHS.contains(&count));
                     s.set_words_read(count as i32);
@@ -299,6 +323,30 @@ impl Penlock {
                 });
             }
         }
+    }
+
+    fn take_photo(&self) {
+        self.photo_wanted.set(true);
+        self.frozen.set(true);
+        self.with_state(|s| {
+            s.set_photo_reading(true);
+            s.set_scan_hit(false);
+            s.set_scan_error("".into());
+            s.set_scan_failed(false);
+            s.set_scan_status("Reading your photo…".into());
+        });
+    }
+
+    fn retake_photo(&self) {
+        self.draft.borrow_mut().clear();
+        self.frozen.set(false);
+        self.with_state(|s| {
+            s.set_draft_ready(false);
+            s.set_draft_complete(false);
+            s.set_words_read(0);
+            s.set_scan_hit(false);
+            s.set_scan_status(self.searching().into());
+        });
     }
 
     /// Hand what was read to the phrase screen. It's only ever a draft: one wrong word can still pass the
@@ -344,7 +392,9 @@ impl Penlock {
         }
         self.last_hit.set(Some(Instant::now()));
         let have: Vec<bool> = (1..=3).map(|i| self.scanned.borrow().contains_key(&i)).collect();
+        self.frozen.set(false);
         self.with_state(|s| {
+            s.set_photo_reading(false);
             s.set_have(ModelRc::new(VecModel::from(have)));
             s.set_scan_error("".into());
             s.set_scan_failed(false);
@@ -352,7 +402,7 @@ impl Penlock {
             s.set_read_share(n as i32);
             s.set_scan_hit(true);
             s.set_scan_status(match unread {
-                0 => format!("Read share {n} · scan the next strip"),
+                0 => format!("Read share {n} · now the next strip"),
                 1 => format!("Read share {n} · 1 faint box"),
                 u => format!("Read share {n} · {u} faint boxes"),
             }
@@ -409,6 +459,8 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
         phrase_ready: Cell::new(false),
         qr_ready: Cell::new(false),
         source: Cell::new(Source::Shares),
+        photo_wanted: Cell::new(false),
+        frozen: Cell::new(false),
         draft: RefCell::default(),
         scanned: RefCell::default(),
         session: Cell::new(0),
@@ -439,6 +491,14 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     cb.on_scan_qr_cancel({
         let p = penlock.clone();
         move || p.open(PenlockScreen::Wallet)
+    });
+    cb.on_take_photo({
+        let p = penlock.clone();
+        move || p.take_photo()
+    });
+    cb.on_retake_photo({
+        let p = penlock.clone();
+        move || p.retake_photo()
     });
     cb.on_review_draft({
         let p = penlock.clone();

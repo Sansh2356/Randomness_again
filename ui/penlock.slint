@@ -934,8 +934,8 @@ export component ScanShares inherits Rectangle {
             color: PenlockState.scan-failed ? Prime.danger : Prime.ink-muted;
         }
 
-        if !root.phrase && !root.qr && PenlockState.scan-error == "": Label {
-            text: PenlockState.can-sign-share ? "Scan one more strip to rebuild your phrase, or sign with share \{PenlockState.read-share} alone." : "Scan any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
+        if !root.phrase && !root.qr && PenlockState.scan-error == "" && !PenlockState.can-sign-share: Label {
+            text: "Take a photo of any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
         }
 
         if root.phrase && PenlockState.scan-error == "" && !PenlockState.draft-ready: VerticalLayout {
@@ -943,7 +943,7 @@ export component ScanShares inherits Rectangle {
 
             Note {
                 icon: Icons.frame;
-                text: "Fill the frame with your written words.";
+                text: "Fill the frame with your written words, then take a photo.";
             }
 
             Note {
@@ -960,7 +960,19 @@ export component ScanShares inherits Rectangle {
             vertical-stretch: 1;
         }
 
+        if !root.phrase && !root.qr: Action {
+            height: PenlockState.can-sign-share ? 52px : 64px;
+            text: PenlockState.photo-reading ? "Reading your photo…" : "Take photo";
+            disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
+            has-icon: !PenlockState.photo-reading;
+            icon: Icons.scan;
+            clicked => {
+                Callbacks.take-photo();
+            }
+        }
+
         if !root.phrase && !root.qr && PenlockState.can-sign-share: Action {
+            height: 48px;
             kind: ActionKind.secondary;
             text: "Sign with share \{PenlockState.read-share}";
             has-icon: true;
@@ -970,14 +982,35 @@ export component ScanShares inherits Rectangle {
             }
         }
 
-        if root.phrase: Action {
-            text: PenlockState.draft-ready ? "Review \{PenlockState.words-read} words" : "Review what was read";
-            disabled: !PenlockState.draft-ready;
-            has-icon: PenlockState.draft-ready;
-            icon-after: true;
-            icon: Icons.arrow-right;
+        if root.phrase && !PenlockState.draft-ready: Action {
+            text: PenlockState.photo-reading ? "Reading your photo…" : "Take photo";
+            disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
+            has-icon: !PenlockState.photo-reading;
+            icon: Icons.scan;
             clicked => {
-                Callbacks.review-draft();
+                Callbacks.take-photo();
+            }
+        }
+
+        if root.phrase && PenlockState.draft-ready: VerticalLayout {
+            spacing: 8px;
+
+            Action {
+                text: "Review \{PenlockState.words-read} words";
+                has-icon: true;
+                icon-after: true;
+                icon: Icons.arrow-right;
+                clicked => {
+                    Callbacks.review-draft();
+                }
+            }
+
+            Action {
+                kind: ActionKind.tertiary;
+                text: "Retake photo";
+                clicked => {
+                    Callbacks.retake-photo();
+                }
             }
         }
     }
