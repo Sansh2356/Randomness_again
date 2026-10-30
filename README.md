@@ -18,7 +18,8 @@ A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), w
 ## What it does
 
 - **Create shares.** Split a 12- or 24-word phrase into three paper shares. Any two rebuild it, and one alone reveals
-  nothing.
+  nothing. Tap a share to see all its rows at once, or save a 12-word share as a PNG that Upload photo can read back.
+  Saved shares go in a `penlock` folder, named with the share number and the date and time in UTC.
 - **Restore from shares.** Take or upload photos of two strips to rebuild the phrase.
 - **Read a written phrase.** Take or upload a photo of a handwritten phrase, then check every word of the draft against
   the paper. An uploaded photo reads better than the 480-pixel camera.
@@ -26,7 +27,8 @@ A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), w
   phrase or from one share, so a Passport holding share 1 and another device holding share 2 can sign together without
   either seeing the other's share or the phrase.
 
-Everything runs offline, on the device. Phrases, shares and keys stay in memory and are never written to storage.
+Everything runs offline, on the device. Phrases, shares and keys stay in memory. The only thing written to storage is a
+share you choose to export, and since any two shares rebuild the phrase, keep no more than one on any device.
 
 Settings, behind the gear on the home screen, holds the network toggle. Turning mainnet on needs a confirmation. It
 resets to signet on each launch, and it locks while a wallet is open because each network has its own keys.

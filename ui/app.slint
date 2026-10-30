@@ -25,7 +25,7 @@ import {
     WalletState,
 } from "callbacks.slint";
 import { Notice, Prime } from "common.slint";
-import { SeedWarning, SettingsButton, PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
+import { SeedWarning, SettingsButton, ShareFull, ShareSaveWarning, PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
 import { AppSettings, MainnetWarning, WalletLoad, WalletHome, WalletQr, WalletInput, WalletReview } from "wallet.slint";
 
 export {
@@ -90,6 +90,16 @@ export component AppWindow inherits Window {
         if PenlockState.screen == PenlockScreen.wallet-qr: WalletQr { }
         if PenlockState.screen == PenlockScreen.wallet-input: WalletInput { }
         if PenlockState.screen == PenlockScreen.wallet-review: WalletReview { }
+    }
+
+    if PenlockState.full-share >= 0: ShareFull {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if PenlockState.confirm-save >= 0: ShareSaveWarning {
+        width: parent.width;
+        height: parent.height;
     }
 
     if !PenlockState.warning-accepted: SeedWarning {

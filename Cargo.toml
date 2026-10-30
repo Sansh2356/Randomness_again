@@ -18,16 +18,18 @@ foundation-themes = { path = ".foundation-sdk/current/lib/keyos/sdk/crates/found
 camera ={ path = ".foundation-sdk/current/lib/keyos/api/camera" }
 # Bitcoin Vision: Penlock share arithmetic and the share-strip scanner (1.6 MB model, embedded).
 penlock = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669" }
-penlock-scan = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669", default-features = false, features = ["bundled-models"] }
+penlock-scan = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669", default-features = false, features = ["bundled-models", "print"] }
 # Bitcoin Vision: handwritten BIP39 phrases (three models, 25 MB, embedded).
 bitcoin-vision-words = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669", default-features = false, features = ["bundled-models"] }
 # The wallet's QR codes are read in the app, with the rest of its camera screens.
 rqrr = { version = "0.10", default-features = false }
+# The font a share is drawn in when it's exported as an image.
+bitcoin-vision-forms = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669" }
 # penlock wants a rand 0.9 RNG; it is fed from getrandom 0.2, which the SDK routes to the TRNG.
 rand_core = "0.9"
 getrandom = "0.2"
 # Names penlock-scan's frame type; same version and features it already builds.
-image = { version = "0.25", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
 # MuSig2 wallet: k256 keeps the aggregation in pure Rust; bitcoin brings keys, PSBTs and sighashes.
 bip39 = "2.2"
 bitcoin = { version = "0.32", features = ["base64"] }

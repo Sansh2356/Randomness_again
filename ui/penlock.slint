@@ -146,7 +146,7 @@ export component PenlockHome inherits Screen {
         }
 
         Body {
-            text: "Split your seed phrase into three paper shares. Any two rebuild it. Runs offline on this Passport, and nothing is saved.";
+            text: "Split your seed phrase into three paper shares. Any two rebuild it. Runs offline, and nothing is saved unless you export it.";
         }
 
         Rectangle {
@@ -272,12 +272,6 @@ export component EnterPhrase inherits Screen {
 
     Content {
         spacing: 8px;
-
-        Note {
-            icon: Icons.lock;
-            tint: Prime.copper;
-            text: "Your phrase stays on this screen. It isn't saved, and it's wiped when you leave.";
-        }
 
         if PenlockState.phrase-note != "": Rectangle {
             border-radius: 12px;
@@ -446,8 +440,9 @@ component SymbolBox inherits Rectangle {
     in property <string> symbol;
     // The worksheet shades the two checksum boxes.
     in property <bool> shaded;
-    width: 40px;
-    height: 40px;
+    in property <length> size: 40px;
+    width: root.size;
+    height: root.size;
     border-radius: 8px;
     border-width: 1px;
     border-color: root.shaded ? Prime.line-accent : Prime.line-strong;
@@ -457,7 +452,7 @@ component SymbolBox inherits Rectangle {
         text: root.symbol;
         color: root.shaded ? Prime.copper-ink : Prime.ink;
         font-family: Prime.mono-font;
-        font-size: 18px;
+        font-size: root.size * 0.45;
         font-weight: 500;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -466,18 +461,23 @@ component SymbolBox inherits Rectangle {
 
 component ShareGrid inherits VerticalLayout {
     in property <[ShareRow]> rows;
+    // Which rows to draw, so a long share can run in two columns.
+    in property <int> first: 0;
+    in property <int> count: root.rows.length;
+    in property <length> box: 40px;
+    in property <length> gap: 6px;
     alignment: start;
     padding-top: 12px;
     padding-bottom: 12px;
-    spacing: 6px;
+    spacing: root.gap;
 
-    for row[i] in root.rows: HorizontalLayout {
+    for i in root.count: HorizontalLayout {
         alignment: center;
-        spacing: 6px;
+        spacing: root.gap;
 
         Text {
             width: 24px;
-            text: i + 1;
+            text: root.first + i + 1;
             color: Prime.ink-faint;
             font-family: Prime.mono-font;
             font-size: 12px;
@@ -486,20 +486,152 @@ component ShareGrid inherits VerticalLayout {
         }
 
         Rectangle {
-            width: 6px;
+            width: root.gap;
         }
 
         for c in 2: SymbolBox {
-            symbol: row.symbols[c];
+            size: root.box;
+            symbol: root.rows[root.first + i].symbols[c];
             shaded: true;
         }
 
         Rectangle {
-            width: 14px;
+            width: root.gap * 2;
         }
 
         for c in 4: SymbolBox {
-            symbol: row.symbols[c + 2];
+            size: root.box;
+            symbol: root.rows[root.first + i].symbols[c + 2];
+        }
+    }
+}
+
+// Every row of one share at once, for copying. A tap anywhere goes back.
+export component ShareFull inherits Rectangle {
+    property <int> share: PenlockState.full-share;
+    property <[ShareRow]> rows: PenlockState.shares[root.share].rows;
+    property <bool> long: root.rows.length > 12;
+    background: Prime.surface;
+
+    TouchArea {
+        clicked => {
+            PenlockState.full-share = -1;
+        }
+    }
+
+    VerticalLayout {
+        padding-top: Prime.status-bar;
+
+        ScreenHeader {
+            title: "Share \{root.share + 1}";
+            trailing: "\{root.rows.length} rows";
+            back => {
+                PenlockState.full-share = -1;
+            }
+        }
+
+        if !root.long: ShareGrid {
+            rows: root.rows;
+            box: 46px;
+            gap: 8px;
+        }
+
+        if root.long: HorizontalLayout {
+            alignment: center;
+
+            ShareGrid {
+                rows: root.rows;
+                count: 12;
+                box: 27px;
+                gap: 4px;
+            }
+
+            ShareGrid {
+                rows: root.rows;
+                first: 12;
+                count: root.rows.length - 12;
+                box: 27px;
+                gap: 4px;
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        Caption {
+            text: "Tap anywhere to go back";
+            horizontal-alignment: center;
+        }
+
+        Rectangle {
+            height: 24px;
+        }
+    }
+}
+
+// A saved share is a file that outlives this screen, so saving is always a stated choice.
+export component ShareSaveWarning inherits Rectangle {
+    property <int> share: PenlockState.confirm-save;
+    property <bool> second: PenlockState.saved-shares > 0;
+
+    TouchArea { }
+
+    Dialog {
+        width: parent.width;
+        height: parent.height;
+        dismissable: false;
+        fill-container: true;
+        backdrop-color: Prime.scrim;
+        panel-background: Prime.surface-raised;
+        panel-border-color: root.second ? Prime.danger : Prime.line;
+        panel-padding: 24px;
+        border-radius: 24px;
+
+        HorizontalLayout {
+            alignment: start;
+
+            Rectangle {
+                width: 48px;
+                height: 48px;
+                border-radius: 24px;
+                background: root.second ? Prime.danger-soft : Prime.copper-soft;
+
+                Icon {
+                    source: Icons.alert;
+                    tint: root.second ? Prime.danger : Prime.copper-ink;
+                }
+            }
+        }
+
+        Eyebrow {
+            text: root.second ? "THIS CAN EXPOSE YOUR SEED" : "SAVED AS A FILE";
+            color: root.second ? Prime.danger : Prime.copper;
+        }
+
+        Title {
+            text: root.second ? "Save a second share here?" : "Save share \{root.share + 1} as an image?";
+        }
+
+        Body {
+            text: root.second ? "Two shares in one place rebuild your seed phrase. Anyone who gets both can take your funds. Keep only one share on any device." : "It goes in the penlock folder and stays until you delete it. One share reveals nothing, but any two rebuild your phrase, so keep the others elsewhere.";
+        }
+
+        Action {
+            height: 52px;
+            text: root.second ? "Save anyway" : "Save image";
+            clicked => {
+                Callbacks.save-share(root.share);
+                PenlockState.confirm-save = -1;
+            }
+        }
+
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Cancel";
+            clicked => {
+                PenlockState.confirm-save = -1;
+            }
         }
     }
 }
@@ -672,6 +804,12 @@ export component ShareSheets inherits Screen {
             Flickable {
                 viewport-height: grid.preferred-height;
 
+                TouchArea {
+                    clicked => {
+                        PenlockState.full-share = root.tab;
+                    }
+                }
+
                 grid := ShareGrid {
                     rows: PenlockState.shares[root.tab].rows;
                 }
@@ -682,19 +820,36 @@ export component ShareSheets inherits Screen {
             height: 8px;
         }
 
-        HorizontalLayout {
-            alignment: center;
-            spacing: 6px;
+        Rectangle {
+            height: 32px;
 
-            Icon {
-                source: Icons.chevron-down;
-                tint: Prime.ink-faint;
-                size: 14px;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Icon {
+                        source: Icons.chevron-down;
+                        tint: Prime.copper-ink;
+                        size: 14px;
+                    }
+                }
+
+                Label {
+                    text: "See all rows";
+                    color: Prime.copper-ink;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
             }
 
-            Caption {
-                text: "Scroll for more rows";
-                wrap: no-wrap;
+            TouchArea {
+                clicked => {
+                    PenlockState.full-share = root.tab;
+                }
             }
         }
     }
@@ -716,15 +871,13 @@ export component ShareSheets inherits Screen {
             }
         }
 
-        // Signing clears the other shares from this screen, so they have to be copied first.
         Action {
             kind: ActionKind.tertiary;
-            text: "Sign with share \{root.tab + 1} on this Passport";
+            text: "Save share \{root.tab + 1} as an image";
             has-icon: true;
-            icon: Icons.pen;
-            disabled: !root.all-seen;
+            icon: Icons.download;
             clicked => {
-                Callbacks.sign-with-sheet(root.tab);
+                PenlockState.confirm-save = root.tab;
             }
         }
     }
@@ -808,6 +961,7 @@ export component ScanShares inherits Rectangle {
     property <int> read-count: (PenlockState.have[0] ? 1 : 0) + (PenlockState.have[1] ? 1 : 0) + (PenlockState.have[2] ? 1 : 0);
     property <bool> phrase: PenlockState.scan-phrase;
     property <bool> qr: PenlockState.scan-qr;
+    property <bool> scanned-one: root.read-count > 0;
 
     ScreenHeader {
         y: Prime.status-bar;
@@ -934,8 +1088,8 @@ export component ScanShares inherits Rectangle {
             color: PenlockState.scan-failed ? Prime.danger : Prime.ink-muted;
         }
 
-        if !root.phrase && !root.qr && PenlockState.scan-error == "" && !PenlockState.can-sign-share: Label {
-            text: "Take a photo of any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
+        if !root.phrase && !root.qr && PenlockState.scan-error == "" && !(root.scanned-one && PenlockState.scan-for-wallet): Label {
+            text: root.scanned-one ? "Now take or upload a photo of a second strip." : "Take a photo of any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
         }
 
         if root.phrase && PenlockState.scan-error == "" && !PenlockState.draft-ready: VerticalLayout {
@@ -989,7 +1143,7 @@ export component ScanShares inherits Rectangle {
             }
         }
 
-        if !root.phrase && !root.qr && PenlockState.can-sign-share: Action {
+        if !root.phrase && !root.qr && PenlockState.scan-for-wallet && PenlockState.can-sign-share: Action {
             height: 48px;
             kind: ActionKind.secondary;
             text: "Sign with share \{PenlockState.read-share}";

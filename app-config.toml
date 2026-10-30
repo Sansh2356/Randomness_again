@@ -17,4 +17,4 @@ contact-email = ""
 support-url = ""
 
 [permissions]
-template = ["gui-app", "camera", "photo-files"]
+template = ["gui-app", "fs-generic", "camera", "photo-files"]

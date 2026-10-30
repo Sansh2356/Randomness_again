@@ -47,6 +47,11 @@ export global PenlockState {
     in property <[ChipRow]> chip-rows;
 
     in property <[ShareSheet]> shares;
+    // The share shown full screen, and the one waiting for a save to be confirmed, or -1.
+    in-out property <int> full-share: -1;
+    in-out property <int> confirm-save: -1;
+    // Saved as images since these shares appeared. Two on one device rebuild the phrase.
+    in property <int> saved-shares;
 
     // Where the camera picture sits on screen; Rust passes it to ShowCamera.
     out property <length> viewfinder-y: UISize.control-center-status-bar-height + 72px;
@@ -72,6 +77,8 @@ export global PenlockState {
     in property <bool> photo-reading;
     // A strip has been read and could sign on its own.
     in property <bool> can-sign-share;
+    // The scan came from the wallet, to sign with one strip rather than restore a phrase.
+    in property <bool> scan-for-wallet;
 
     in property <[string]> words;
     in property <[string]> corrections;
@@ -128,6 +135,7 @@ export global Callbacks {
     callback penlock-create();
     callback penlock-scan();
     callback penlock-read-phrase();
+    callback save-share(int);
     callback take-photo();
     callback upload-photo();
     callback retake-photo();
@@ -142,10 +150,10 @@ export global Callbacks {
     callback scan-qr-cancel();
     callback qr-scanned(string);
     callback sign-with-scanned();
-    callback sign-with-sheet(int);
     callback open-wallet(string);
     callback open-share(string);
     callback wallet-paste-share();
+    callback wallet-scan-share();
     callback wallet-from-recovered();
     callback wallet-home();
     callback wallet-lock();

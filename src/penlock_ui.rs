@@ -4,16 +4,16 @@
 // Penlock screens: creating shares from a phrase, restoring a phrase by scanning two strips, and reading
 // a handwritten phrase.
 // Phrases, shares and readings only live in this struct and the UI while their screen is open, and are
-// dropped when it closes. Nothing is logged or saved.
+// dropped when it closes. Nothing is logged, and only a share the person chooses to export is saved.
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use penlock::word::WORD_LEN;
-use penlock::{Distribution, ShareIndex};
+use penlock::{Distribution, Share, ShareIndex};
 use slint_keyos_platform::fs::{Location, OpenFlags};
 use slint_keyos_platform::gui_server_api::navigation::filepicker::{
     AllowedExtensions, Location as PickerLocation, SelectFileOptions,
@@ -24,7 +24,8 @@ use slint_keyos_platform::slint::{self, ComponentHandle, Image, Model, ModelRc, 
 use crate::backup::{self, PhraseCheck};
 use crate::scan::{self, Event, Reader, Source};
 use crate::{
-    gui_permissions, AppContext, AppWindow, Callbacks, ChipRow, PenlockScreen, PenlockState, PhraseStatus, PhraseWord, ShareRow, ShareSheet,
+    gui_permissions, AppContext, AppState, AppWindow, Callbacks, ChipRow, PenlockScreen, PenlockState, PhraseStatus,
+    PhraseWord, ShareRow, ShareSheet, ToastVariant,
 };
 
 camera::use_api!();
@@ -38,6 +39,8 @@ const HIT_HOLD: Duration = Duration::from_millis(1500);
 const CHIPS_PER_ROW: usize = 3;
 // Far past any phone photo: the image reader's own limit is 64 MiB, and a Passport has less room.
 const MAX_UPLOAD_BYTES: u64 = 32 * 1024 * 1024;
+// Drawing a strip recurses deeply, and the app's own stack is small on a device.
+const RENDER_STACK: usize = 8 << 20;
 
 type Cells = Vec<[Distribution; WORD_LEN]>;
 
@@ -114,6 +117,9 @@ impl Penlock {
         self.frozen.set(false);
         self.with_state(|s| {
             s.set_photo_reading(false);
+            s.set_full_share(-1);
+            s.set_confirm_save(-1);
+            s.set_saved_shares(0);
             s.set_phrase("".into());
             s.set_phrase_note("".into());
             s.set_draft_ready(false);
@@ -185,10 +191,7 @@ impl Penlock {
                 });
             }
             Err(e) => {
-                let ui = self.ui();
-                let app = ui.global::<crate::AppState>();
-                app.set_toast(e.into());
-                app.set_toast_variant(crate::ToastVariant::Error);
+                self.toast(&e, "", ToastVariant::Error);
             }
         }
     }
@@ -202,6 +205,7 @@ impl Penlock {
         self.with_state(|s| {
             s.set_scan_phrase(source == Source::Phrase);
             s.set_scan_qr(source == Source::Qr);
+            s.set_scan_for_wallet(false);
             s.set_reader_ready(ready);
             s.set_scan_status(status.into());
         });
@@ -443,15 +447,55 @@ impl Penlock {
         self.ui().global::<Callbacks>().invoke_open_share(text.into());
     }
 
-    /// Take one of the shares on screen to the wallet. The others leave this Passport with the screen.
-    fn sign_with_sheet(&self, sheet: usize) {
-        let ui = self.ui();
-        let Some(rows) = ui.global::<PenlockState>().get_shares().row_data(sheet) else { return };
+    fn sheet_text(&self, sheet: usize) -> Option<String> {
+        let rows = self.ui().global::<PenlockState>().get_shares().row_data(sheet)?;
         let rows: Vec<String> =
             rows.rows.iter().map(|row| row.symbols.iter().map(|c| c.to_string()).collect()).collect();
-        let text = format!("penlock v1 share {}\n{}", sheet + 1, rows.join("\n"));
-        self.open(PenlockScreen::Home);
-        ui.global::<Callbacks>().invoke_open_share(text.into());
+        Some(format!("penlock v1 share {}\n{}", sheet + 1, rows.join("\n")))
+    }
+
+    /// Save one share on the screen as a strip image, under a name that can't replace an earlier one.
+    fn save_share(&self, sheet: usize) {
+        match self.write_share(sheet) {
+            Ok(path) => {
+                self.with_state(|s| s.set_saved_shares(s.get_saved_shares() + 1));
+                self.toast(&format!("Share {} saved", sheet + 1), &format!("{path}, in your files."), ToastVariant::Success);
+            }
+            Err(e) => self.toast(&e, "", ToastVariant::Error),
+        }
+    }
+
+    fn write_share(&self, sheet: usize) -> Result<String, String> {
+        let text = self.sheet_text(sheet).ok_or("That share is gone.")?;
+        let share = Share::parse(&text, None).map_err(|e| e.to_string())?;
+        let png = std::thread::Builder::new()
+            .name("share-image".into())
+            .stack_size(RENDER_STACK)
+            .spawn(move || backup::share_png(&share))
+            .map_err(|e| e.to_string())?
+            .join()
+            .map_err(|_| "The image couldn't be drawn.".to_string())??;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
+        let path = backup::export_path(sheet as u8 + 1, now);
+        // A share is the one file here that can't be remade, so nothing ever replaces one.
+        if self.cx.fs.metadata(path.as_str(), Location::User).is_ok() {
+            return Err("A file with that name exists. Try again in a moment.".to_string());
+        }
+        let failed = |e| {
+            log::warn!("saving a share: {e:?}");
+            "The image couldn't be saved.".to_string()
+        };
+        self.cx.fs.ensure_parent_dir_exists(&path, Location::User).map_err(failed)?;
+        self.cx.fs.durable_file_write(&path, Location::User, &png).map_err(failed)?;
+        Ok(path)
+    }
+
+    fn toast(&self, message: &str, detail: &str, variant: ToastVariant) {
+        let ui = self.ui();
+        let app = ui.global::<AppState>();
+        app.set_toast(message.into());
+        app.set_toast_detail(detail.into());
+        app.set_toast_variant(variant);
     }
 
     fn read(&self, index: ShareIndex, cells: Cells, unread: usize) {
@@ -508,8 +552,13 @@ impl Penlock {
                 // Forget the share just read so the person can rescan it.
                 self.scanned.borrow_mut().remove(&n);
                 let have: Vec<bool> = (1..=3).map(|i| self.scanned.borrow().contains_key(&i)).collect();
+                let kept = self.scanned.borrow().keys().next().copied();
                 self.with_state(|s| {
                     s.set_have(ModelRc::new(VecModel::from(have)));
+                    s.set_can_sign_share(kept.is_some());
+                    s.set_read_share(kept.map_or(0, i32::from));
+                    s.set_scan_hit(false);
+                    s.set_scan_status(self.searching().into());
                     s.set_scan_error(e.into());
                     s.set_scan_failed(true);
                 });
@@ -562,6 +611,17 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
         let p = penlock.clone();
         move || p.open(PenlockScreen::Wallet)
     });
+    cb.on_wallet_scan_share({
+        let p = penlock.clone();
+        move || {
+            p.start_scan(Source::Shares);
+            p.with_state(|s| s.set_scan_for_wallet(true));
+        }
+    });
+    cb.on_save_share({
+        let p = penlock.clone();
+        move |sheet| p.save_share(sheet as usize)
+    });
     cb.on_take_photo({
         let p = penlock.clone();
         move || p.take_photo()
@@ -581,10 +641,6 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     cb.on_sign_with_scanned({
         let p = penlock.clone();
         move || p.sign_with_scanned()
-    });
-    cb.on_sign_with_sheet({
-        let p = penlock.clone();
-        move |sheet| p.sign_with_sheet(sheet as usize)
     });
     cb.on_penlock_close({
         let p = penlock.clone();
