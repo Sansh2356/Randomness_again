@@ -40,15 +40,21 @@ pub enum Event {
     Nothing,
 }
 
+/// What a reader is handed: a camera frame, or an uploaded photo, still encoded.
+enum Job {
+    Frame(RgbImage),
+    Upload(Vec<u8>),
+}
+
 pub struct Reader {
-    frames: mpsc::SyncSender<RgbImage>,
+    frames: mpsc::SyncSender<Job>,
     pub events: mpsc::Receiver<Event>,
 }
 
 impl Reader {
     pub fn start(source: Source) -> Self {
         // Zero capacity: a send only succeeds while the thread is blocked waiting for a frame.
-        let (frames, frame_rx) = mpsc::sync_channel::<RgbImage>(0);
+        let (frames, frame_rx) = mpsc::sync_channel::<Job>(0);
         let (event_tx, events) = mpsc::channel();
         std::thread::Builder::new()
             .name("penlock-reader".into())
@@ -63,10 +69,13 @@ impl Reader {
     }
 
     /// Hand a frame to the reader if it is idle. Returns false (and drops the frame) if it is busy.
-    pub fn offer(&self, frame: RgbImage) -> bool { self.frames.try_send(frame).is_ok() }
+    pub fn offer(&self, frame: RgbImage) -> bool { self.frames.try_send(Job::Frame(frame)).is_ok() }
+
+    /// The same for an uploaded photo. Returns false if the reader is busy.
+    pub fn offer_upload(&self, photo: Vec<u8>) -> bool { self.frames.try_send(Job::Upload(photo)).is_ok() }
 }
 
-fn read_shares(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
+fn read_shares(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
     let scanner = match Scanner::bundled() {
         Ok(s) => s,
         Err(e) => {
@@ -75,8 +84,12 @@ fn read_shares(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
         }
     };
     let _ = events.send(Event::Ready);
-    for frame in frames {
-        let event = match scanner.scan_rgb(&frame, ScanOptions::default()) {
+    for job in jobs {
+        let read = match job {
+            Job::Frame(frame) => scanner.scan_rgb(&frame, ScanOptions::default()),
+            Job::Upload(photo) => scanner.scan(&photo, ScanOptions::default()),
+        };
+        let event = match read {
             Ok(result) => result
                 .shares
                 .into_iter()
@@ -90,7 +103,7 @@ fn read_shares(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
     }
 }
 
-fn read_phrases(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
+fn read_phrases(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
     let scanner = match bitcoin_vision_words::Scanner::bundled() {
         Ok(s) => s,
         Err(e) => {
@@ -99,8 +112,12 @@ fn read_phrases(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
         }
     };
     let _ = events.send(Event::Ready);
-    for frame in frames {
-        let event = match scanner.scan_rgb(&frame, bitcoin_vision_words::ScanOptions::default()) {
+    for job in jobs {
+        let read = match job {
+            Job::Frame(frame) => scanner.scan_rgb(&frame, bitcoin_vision_words::ScanOptions::default()),
+            Job::Upload(photo) => scanner.scan(&photo, bitcoin_vision_words::ScanOptions::default()),
+        };
+        let event = match read {
             Ok(result) => {
                 let document = result.document();
                 let words: Vec<String> = document
@@ -122,9 +139,10 @@ fn read_phrases(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
     }
 }
 
-fn read_qr_codes(frames: mpsc::Receiver<RgbImage>, events: mpsc::Sender<Event>) {
+fn read_qr_codes(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
     let _ = events.send(Event::Ready);
-    for frame in frames {
+    for job in jobs {
+        let Job::Frame(frame) = job else { continue };
         let event = decode_qr(&frame).map_or(Event::Nothing, Event::Qr);
         if events.send(event).is_err() {
             break;

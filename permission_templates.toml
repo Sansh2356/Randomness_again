@@ -57,6 +57,10 @@
     "NavigationCancel",
 ]
 
+[photo-files]
+# Uploading a photo of a strip or a phrase, picked in the system's file picker.
+"os/fs" = ["GetUserReadAccess", "GetAirlockReadAccess", "GetUsbReadAccess"]
+
 [camera]
 # Penlock share scanning: camera frames (asks once) and the viewfinder.
 "os/camera" = ["Subscribe"]

@@ -960,14 +960,32 @@ export component ScanShares inherits Rectangle {
             vertical-stretch: 1;
         }
 
-        if !root.phrase && !root.qr: Action {
-            height: PenlockState.can-sign-share ? 52px : 64px;
-            text: PenlockState.photo-reading ? "Reading your photo…" : "Take photo";
-            disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
-            has-icon: !PenlockState.photo-reading;
-            icon: Icons.scan;
-            clicked => {
-                Callbacks.take-photo();
+        if !root.qr && !PenlockState.draft-ready: HorizontalLayout {
+            spacing: 12px;
+
+            Action {
+                width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                height: 52px;
+                text: PenlockState.photo-reading ? "Reading…" : "Take photo";
+                disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
+                has-icon: !PenlockState.photo-reading;
+                icon: Icons.scan;
+                clicked => {
+                    Callbacks.take-photo();
+                }
+            }
+
+            Action {
+                width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                height: 52px;
+                kind: ActionKind.secondary;
+                text: "Upload photo";
+                disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
+                has-icon: true;
+                icon: Icons.upload;
+                clicked => {
+                    Callbacks.upload-photo();
+                }
             }
         }
 
@@ -979,16 +997,6 @@ export component ScanShares inherits Rectangle {
             icon: Icons.pen;
             clicked => {
                 Callbacks.sign-with-scanned();
-            }
-        }
-
-        if root.phrase && !PenlockState.draft-ready: Action {
-            text: PenlockState.photo-reading ? "Reading your photo…" : "Take photo";
-            disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
-            has-icon: !PenlockState.photo-reading;
-            icon: Icons.scan;
-            clicked => {
-                Callbacks.take-photo();
             }
         }
 
@@ -1007,7 +1015,7 @@ export component ScanShares inherits Rectangle {
 
             Action {
                 kind: ActionKind.tertiary;
-                text: "Retake photo";
+                text: "Choose another photo";
                 clicked => {
                     Callbacks.retake-photo();
                 }

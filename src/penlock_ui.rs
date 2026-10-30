@@ -8,17 +8,23 @@
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use penlock::word::WORD_LEN;
 use penlock::{Distribution, ShareIndex};
+use slint_keyos_platform::fs::{Location, OpenFlags};
+use slint_keyos_platform::gui_server_api::navigation::filepicker::{
+    AllowedExtensions, Location as PickerLocation, SelectFileOptions,
+};
+use slint_keyos_platform::navigation::select_file;
 use slint_keyos_platform::slint::{self, ComponentHandle, Image, Model, ModelRc, SharedString, VecModel};
 
 use crate::backup::{self, PhraseCheck};
 use crate::scan::{self, Event, Reader, Source};
 use crate::{
-    AppContext, AppWindow, Callbacks, ChipRow, PenlockScreen, PenlockState, PhraseStatus, PhraseWord, ShareRow, ShareSheet,
+    gui_permissions, AppContext, AppWindow, Callbacks, ChipRow, PenlockScreen, PenlockState, PhraseStatus, PhraseWord, ShareRow, ShareSheet,
 };
 
 camera::use_api!();
@@ -30,6 +36,8 @@ const CAMERA_WATCHDOG: Duration = Duration::from_secs(5);
 // How long "Read share N" stays up before the status goes back to searching.
 const HIT_HOLD: Duration = Duration::from_millis(1500);
 const CHIPS_PER_ROW: usize = 3;
+// Far past any phone photo: the image reader's own limit is 64 MiB, and a Passport has less room.
+const MAX_UPLOAD_BYTES: u64 = 32 * 1024 * 1024;
 
 type Cells = Vec<[Distribution; WORD_LEN]>;
 
@@ -337,6 +345,68 @@ impl Penlock {
         });
     }
 
+    /// Read a photo already on the device: sharper than the camera, so better for handwriting.
+    fn upload_photo(&self) {
+        let options = SelectFileOptions::default()
+            .with_allowed_extensions(AllowedExtensions::specific(["jpg", "jpeg", "png", "webp"]));
+        let picked = select_file::<gui_permissions::GuiPermissions>(options);
+        let file = match picked {
+            Ok(Some(result)) => result.files.into_iter().next(),
+            Ok(None) => None,
+            Err(e) => {
+                log::warn!("file picker: {e:?}");
+                self.upload_failed("The file picker couldn't open.");
+                return;
+            }
+        };
+        let Some((path, location)) = file else { return };
+        let location = match location {
+            PickerLocation::Internal => Location::User,
+            PickerLocation::Airlock => Location::Airlock,
+            PickerLocation::External => Location::Usb,
+        };
+        let photo = match self.read_photo(&path, location) {
+            Ok(photo) => photo,
+            Err(e) => {
+                self.upload_failed(e);
+                return;
+            }
+        };
+        self.frozen.set(true);
+        self.with_state(|s| {
+            s.set_preview(Image::default());
+            s.set_photo_reading(true);
+            s.set_scan_hit(false);
+            s.set_scan_error("".into());
+            s.set_scan_failed(false);
+            s.set_scan_status("Reading your photo…".into());
+        });
+        if !self.reader(self.source.get()).offer_upload(photo) {
+            self.frozen.set(false);
+            self.with_state(|s| s.set_photo_reading(false));
+            self.upload_failed("Still reading the last photo. Try again in a moment.");
+        }
+    }
+
+    fn read_photo(&self, path: &str, location: Location) -> Result<Vec<u8>, &'static str> {
+        let unreadable = "That photo couldn't be opened.";
+        let size = self.cx.fs.metadata(path, location).map_err(|_| unreadable)?.size;
+        if size > MAX_UPLOAD_BYTES {
+            return Err("That photo is too large. Use one under 32 MB.");
+        }
+        let mut file = self.cx.fs.open_file(path, location, OpenFlags::READ_ONLY).map_err(|_| unreadable)?;
+        let mut photo = Vec::with_capacity(size as usize);
+        file.read_to_end(&mut photo).map_err(|_| unreadable)?;
+        Ok(photo)
+    }
+
+    fn upload_failed(&self, message: &str) {
+        self.with_state(|s| {
+            s.set_scan_error(message.into());
+            s.set_scan_failed(true);
+        });
+    }
+
     fn retake_photo(&self) {
         self.draft.borrow_mut().clear();
         self.frozen.set(false);
@@ -495,6 +565,10 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     cb.on_take_photo({
         let p = penlock.clone();
         move || p.take_photo()
+    });
+    cb.on_upload_photo({
+        let p = penlock.clone();
+        move || p.upload_photo()
     });
     cb.on_retake_photo({
         let p = penlock.clone();

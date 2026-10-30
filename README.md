@@ -19,8 +19,9 @@ A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), w
 
 - **Create shares.** Split a 12- or 24-word phrase into three paper shares. Any two rebuild it, and one alone reveals
   nothing.
-- **Restore from shares.** Photograph two strips to rebuild the phrase.
-- **Read a written phrase.** Take a photo of a handwritten phrase, then check every word of the draft against the paper.
+- **Restore from shares.** Take or upload photos of two strips to rebuild the phrase.
+- **Read a written phrase.** Take or upload a photo of a handwritten phrase, then check every word of the draft against
+  the paper. An uploaded photo reads better than the 480-pixel camera.
 - **MuSig wallet.** Sign taproot transactions with cosigners, using MuSig2 over QR codes. A key can come from a seed
   phrase or from one share, so a Passport holding share 1 and another device holding share 2 can sign together without
   either seeing the other's share or the phrase.
