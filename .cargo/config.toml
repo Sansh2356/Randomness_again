@@ -1,0 +1,10 @@
+# The KeyOS target (armv7a-unknown-xous-elf) has no target_family, so Cargo never sets
+# CARGO_CFG_TARGET_FAMILY, and tract-linalg's build script unwraps it. Cargo's own value still wins
+# for targets that have one (the hosted simulator build).
+[env]
+CARGO_CFG_TARGET_FAMILY = ""
+# C and assembly in dependencies (tract-linalg kernels, secp256k1) must be cross-compiled for the
+# device; without these, cc-rs falls back to the host gcc. Host builds ignore target-suffixed vars.
+CC_armv7a_unknown_xous_elf = "arm-none-eabi-gcc"
+AR_armv7a_unknown_xous_elf = "arm-none-eabi-ar"
+CFLAGS_armv7a_unknown_xous_elf = "-mfloat-abi=hard -fPIC"

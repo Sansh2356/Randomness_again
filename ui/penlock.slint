@@ -1,0 +1,434 @@
+// SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: MIT
+
+import { Theme, UISize, ControlSize, ButtonVariant, Images } from "@ui/theme.slint";
+import { Button } from "@ui/button.slint";
+import { Card } from "@ui/card.slint";
+import { Chip, ChipColor } from "@ui/chip.slint";
+import { SegmentedControl } from "@ui/segmented_control.slint";
+import { Spinner } from "@ui/spinner.slint";
+import { TextArea } from "@ui/textarea.slint";
+import { Callbacks, PenlockState, PhraseStatus, ShareRow } from "callbacks.slint";
+import { SectionLabel, Helper, ScreenHeader, Page } from "common.slint";
+
+// The Penlock section's body, below the section switcher.
+export component PenlockHome inherits VerticalLayout {
+    spacing: Theme.spacing-lg;
+
+    Card {
+        width: 100%;
+        eyebrow: "2-OF-3 PAPER BACKUP";
+        title: "Penlock";
+        body: "Split a seed phrase into three paper shares. Any two bring it back; one alone reveals nothing.";
+        footer: "Runs entirely on this Passport, offline. Nothing is saved.";
+    }
+
+    Card {
+        width: 100%;
+        size: ControlSize.sm;
+        interactive: true;
+        icon: Images.icon("key", 24px);
+        title: "Create shares";
+        subtitle: "Split a 12 or 24-word phrase";
+        clicked => {
+            Callbacks.penlock-create();
+        }
+    }
+
+    Card {
+        width: 100%;
+        size: ControlSize.sm;
+        interactive: true;
+        icon: Images.icon("camera", 24px);
+        title: "Restore from shares";
+        subtitle: "Scan any two strips with the camera";
+        clicked => {
+            Callbacks.penlock-scan();
+        }
+    }
+
+    Rectangle {
+        vertical-stretch: 1;
+    }
+}
+
+export component EnterPhrase inherits Page {
+    ScreenHeader {
+        title: "Create shares";
+        back => {
+            phrase.value = "";
+            Callbacks.penlock-close();
+        }
+    }
+
+    Card {
+        width: 100%;
+        size: ControlSize.sm;
+        icon: Images.icon("lock", 24px);
+        body: "Your phrase stays on this screen. It isn't saved, and it's wiped when you leave.";
+    }
+
+    phrase := TextArea {
+        width: 100%;
+        label: "Seed phrase";
+        placeholder: "Type your words, separated by spaces";
+        min-rows: 4;
+        max-rows: 7;
+        error: PenlockState.phrase-status == PhraseStatus.error ? PenlockState.phrase-message : "";
+        changed(text) => {
+            Callbacks.phrase-edited(text);
+        }
+    }
+
+    if PenlockState.phrase-status != PhraseStatus.error: Text {
+        text: PenlockState.phrase-message;
+        color: PenlockState.phrase-status == PhraseStatus.valid ? Theme.color-success : Theme.palette-muted;
+        font-family: Theme.font-primary;
+        font-size: Theme.font-size-helper;
+        font-weight: PenlockState.phrase-status == PhraseStatus.valid ? Theme.font-weight-semibold : Theme.font-weight-normal;
+        wrap: word-wrap;
+    }
+
+    Rectangle {
+        vertical-stretch: 1;
+    }
+
+    Button {
+        width: 100%;
+        text: "Create shares";
+        size: ControlSize.lg;
+        full-width: true;
+        disabled: PenlockState.phrase-status != PhraseStatus.valid;
+        clicked => {
+            Callbacks.split-phrase(phrase.value);
+            phrase.value = "";
+        }
+    }
+}
+
+component SymbolBox inherits Rectangle {
+    in property <string> symbol;
+    // The worksheet shades the two checksum boxes.
+    in property <bool> shaded;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: Theme.palette-border;
+    background: root.shaded ? Theme.palette-secondary.with-alpha(Theme.is-dark ? 0.25 : 0.55) : Theme.palette-surface;
+
+    Text {
+        text: root.symbol;
+        color: Theme.palette-foreground;
+        font-family: Theme.font-primary;
+        font-size: Theme.font-size-md;
+        font-weight: Theme.font-weight-bold;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+component ShareGrid inherits VerticalLayout {
+    in property <[ShareRow]> rows;
+    alignment: start;
+    spacing: Theme.spacing-sm;
+
+    for row[i] in root.rows: HorizontalLayout {
+        alignment: center;
+        spacing: 6px;
+
+        Text {
+            width: 32px;
+            text: i + 1;
+            color: Theme.palette-muted;
+            font-family: Theme.font-primary;
+            font-size: Theme.font-size-label;
+            font-weight: Theme.font-weight-semibold;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: 4px;
+        }
+
+        for c in 2: SymbolBox {
+            symbol: row.symbols[c];
+            shaded: true;
+        }
+
+        Rectangle {
+            width: 10px;
+        }
+
+        for c in 4: SymbolBox {
+            symbol: row.symbols[c + 2];
+        }
+    }
+}
+
+export component ShareSheets inherits Page {
+    property <int> tab: 0;
+    property <bool> seen-2;
+    property <bool> seen-3;
+
+    ScreenHeader {
+        title: "Your shares";
+        back => {
+            Callbacks.penlock-close();
+        }
+    }
+
+    SegmentedControl {
+        options: ["Share 1", "Share 2", "Share 3"];
+        selected-index: root.tab;
+        changed(index, _) => {
+            root.tab = index;
+            if index == 1 {
+                root.seen-2 = true;
+            }
+            if index == 2 {
+                root.seen-3 = true;
+            }
+        }
+    }
+
+    Helper {
+        text: "Copy share \{root.tab + 1} onto its own worksheet strip, shaded boxes first. Keep the three strips in different places.";
+    }
+
+    Flickable {
+        vertical-stretch: 1;
+
+        ShareGrid {
+            rows: PenlockState.shares[root.tab].rows;
+        }
+    }
+
+    Button {
+        width: 100%;
+        text: root.seen-2 && root.seen-3 ? "I've copied all three" : "View all three shares to finish";
+        size: ControlSize.lg;
+        full-width: true;
+        disabled: !(root.seen-2 && root.seen-3);
+        clicked => {
+            Callbacks.penlock-close();
+        }
+    }
+}
+
+export component ScanShares inherits Rectangle {
+    background: Theme.palette-background;
+
+    ScreenHeader {
+        x: Theme.spacing-xl;
+        y: Theme.spacing-lg + UISize.control-center-status-bar-height;
+        width: parent.width - 2 * Theme.spacing-xl;
+        title: "Restore from shares";
+        back => {
+            Callbacks.penlock-close();
+        }
+    }
+
+    viewfinder := Rectangle {
+        x: 0;
+        y: PenlockState.viewfinder-y;
+        width: parent.width;
+        height: self.width;
+        background: black;
+        clip: true;
+
+        Image {
+            width: parent.width;
+            height: parent.height;
+            source: PenlockState.preview;
+            image-fit: cover;
+        }
+
+        // A share strip is tall and narrow: frame it that way.
+        Rectangle {
+            width: parent.width * 0.6;
+            height: parent.height * 0.88;
+            border-width: 3px;
+            border-radius: 18px;
+            border-color: PenlockState.reader-ready ? white : white.with-alpha(0.45);
+        }
+
+        if !PenlockState.camera-live: Spinner { }
+
+        status := Rectangle {
+            y: parent.height - self.height - Theme.spacing-lg;
+            height: 40px;
+            width: min(parent.width - 2 * Theme.spacing-xl, status-text.preferred-width + 2 * Theme.spacing-lg);
+            border-radius: self.height / 2;
+            background: black.with-alpha(0.65);
+
+            status-text := Text {
+                text: PenlockState.scan-status;
+                color: white;
+                font-family: Theme.font-primary;
+                font-size: Theme.font-size-label;
+                font-weight: Theme.font-weight-semibold;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+    }
+
+    VerticalLayout {
+        x: Theme.spacing-xl;
+        y: viewfinder.y + viewfinder.height + Theme.spacing-lg;
+        width: parent.width - 2 * Theme.spacing-xl;
+        height: parent.height - self.y - Theme.spacing-xl;
+        alignment: start;
+        spacing: Theme.spacing-md;
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: Theme.spacing-sm;
+
+            for i in 3: Chip {
+                text: "Share \{i + 1}";
+                color: PenlockState.have[i] ? ChipColor.success : ChipColor.default;
+                icon: PenlockState.have[i] ? Images.icon("check", 16px) : @image-url("");
+            }
+        }
+
+        if PenlockState.scan-error != "": Text {
+            text: PenlockState.scan-error;
+            color: Theme.palette-danger;
+            font-family: Theme.font-primary;
+            font-size: Theme.font-size-helper;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        if PenlockState.scan-error == "": Helper {
+            text: "Scan any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
+        }
+    }
+}
+
+component WordCell inherits Rectangle {
+    in property <int> number;
+    in property <string> word;
+    height: 44px;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: Theme.palette-border;
+    background: Theme.palette-surface;
+
+    HorizontalLayout {
+        padding-left: Theme.spacing-md;
+        padding-right: Theme.spacing-md;
+        spacing: Theme.spacing-sm;
+
+        Text {
+            width: 24px;
+            text: root.number;
+            color: Theme.palette-muted;
+            font-family: Theme.font-primary;
+            font-size: Theme.font-size-label;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+
+        Text {
+            text: root.word;
+            color: Theme.palette-foreground;
+            font-family: Theme.font-primary;
+            font-size: Theme.font-size-subtitle;
+            font-weight: Theme.font-weight-semibold;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component Recovered inherits Page {
+    property <bool> revealed;
+    property <int> half: floor((PenlockState.words.length + 1) / 2);
+
+    ScreenHeader {
+        title: "Phrase recovered";
+        back => {
+            Callbacks.penlock-close();
+        }
+    }
+
+    Card {
+        width: 100%;
+        icon: Images.icon("check-circle", 24px);
+        accent-color: Theme.color-success;
+        selected: true;
+        eyebrow: "RECOVERED";
+        title: "\{PenlockState.words.length} words";
+        subtitle: PenlockState.result-subtitle;
+    }
+
+    if PenlockState.corrections.length > 0: Card {
+        width: 100%;
+        size: ControlSize.sm;
+        icon: Images.icon("alert", 24px);
+        eyebrow: "RECHECK ON PAPER";
+        body: PenlockState.corrections[0] + (PenlockState.corrections.length > 1 ? "\n" + PenlockState.corrections[1] : "") + (PenlockState.corrections.length > 2 ? "\n…and \{PenlockState.corrections.length - 2} more" : "");
+    }
+
+    if !root.revealed: VerticalLayout {
+        vertical-stretch: 1;
+        alignment: center;
+        spacing: Theme.spacing-md;
+
+        Button {
+            width: 100%;
+            text: "Show phrase";
+            start-icon: Images.icon("eye", 24px);
+            variant: ButtonVariant.secondary;
+            full-width: true;
+            clicked => {
+                root.revealed = true;
+            }
+        }
+
+        Helper {
+            text: "Make sure no one can see your screen.";
+        }
+    }
+
+    if root.revealed: Flickable {
+        vertical-stretch: 1;
+
+        // Column-major, like a recovery card: 1–6 on the left, 7–12 on the right.
+        VerticalLayout {
+            alignment: start;
+            spacing: Theme.spacing-sm;
+
+            for r in root.half: HorizontalLayout {
+                spacing: Theme.spacing-sm;
+
+                WordCell {
+                    horizontal-stretch: 1;
+                    number: r + 1;
+                    word: PenlockState.words[r];
+                }
+
+                WordCell {
+                    horizontal-stretch: 1;
+                    visible: r + root.half < PenlockState.words.length;
+                    number: r + root.half + 1;
+                    word: PenlockState.words[r + root.half];
+                }
+            }
+        }
+    }
+
+    Button {
+        width: 100%;
+        text: "Done";
+        size: ControlSize.lg;
+        full-width: true;
+        clicked => {
+            Callbacks.penlock-close();
+        }
+    }
+}

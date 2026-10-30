@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: MIT
+
+import { ToastVariant } from "@ui/toast.slint";
+import { UISize } from "@ui/theme.slint";
+
+export struct NoteItem {
+    amount: string,
+    mint: string,
+}
+
+export global AppState {
+    // 0 = Wallet, 1 = Penlock.
+    in-out property <int> section: 0;
+    in property <string> balance: "0 sat";
+    in property <[NoteItem]> notes;
+    // Note being sent, or -1.
+    in property <int> selected: -1;
+    in property <image> qr;
+    in property <string> toast;
+    in property <ToastVariant> toast-variant;
+}
+
+export enum PenlockScreen { home, enter, shares, scan, result }
+
+// One worksheet row: six symbols, the two shaded checksum boxes first.
+export struct ShareRow {
+    symbols: [string],
+}
+
+export struct ShareSheet {
+    rows: [ShareRow],
+}
+
+export enum PhraseStatus { neutral, error, valid }
+
+export global PenlockState {
+    in-out property <PenlockScreen> screen: PenlockScreen.home;
+
+    in property <string> phrase-message: "Enter 12 or 24 words, separated by spaces";
+    in property <PhraseStatus> phrase-status: PhraseStatus.neutral;
+
+    in property <[ShareSheet]> shares;
+
+    // Where the camera picture sits on screen; Rust passes it to ShowCamera.
+    out property <length> viewfinder-y: UISize.control-center-status-bar-height + 72px;
+    in property <image> preview;
+    in property <bool> camera-live;
+    in property <bool> reader-ready;
+    in property <string> scan-status: "Starting camera…";
+    in property <string> scan-error;
+    in property <[bool]> have: [false, false, false];
+
+    in property <[string]> words;
+    in property <[string]> corrections;
+    in property <string> result-subtitle;
+}
+
+export global Callbacks {
+    callback scan-receive();
+    callback select-note(int);
+    callback close-note();
+    callback mark-sent();
+    callback dismiss-toast();
+
+    callback penlock-create();
+    callback penlock-scan();
+    // Leave the current Penlock screen, wiping whatever phrase or shares it held.
+    callback penlock-close();
+    callback phrase-edited(string);
+    callback split-phrase(string);
+}

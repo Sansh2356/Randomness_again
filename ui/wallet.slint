@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: MIT
+
+import { Theme, ControlSize, ButtonVariant, Images } from "@ui/theme.slint";
+import { Button } from "@ui/button.slint";
+import { Card } from "@ui/card.slint";
+import { AppState, Callbacks } from "callbacks.slint";
+import { SectionLabel, Helper, ScreenHeader, Page } from "common.slint";
+
+// The wallet section's body, below the section switcher.
+export component WalletHome inherits VerticalLayout {
+    spacing: Theme.spacing-lg;
+
+    Card {
+        width: 100%;
+        eyebrow: "BALANCE";
+        title: AppState.balance;
+        subtitle: AppState.notes.length == 0 ? "No notes yet" : AppState.notes.length == 1 ? "1 note held offline" : "\{AppState.notes.length} notes held offline";
+        footer: "Received tokens aren't checked with the mint until someone online redeems them.";
+    }
+
+    SectionLabel {
+        text: "NOTES";
+    }
+
+    Flickable {
+        vertical-stretch: 1;
+
+        VerticalLayout {
+            alignment: start;
+            spacing: Theme.spacing-sm;
+
+            if AppState.notes.length == 0: Helper {
+                text: "Scan a Cashu QR code to receive ecash.";
+                font-size: Theme.font-size-subtitle;
+            }
+
+            for note[i] in AppState.notes: Card {
+                width: 100%;
+                size: ControlSize.sm;
+                interactive: true;
+                title: note.amount;
+                subtitle: note.mint;
+                clicked => {
+                    Callbacks.select-note(i);
+                }
+            }
+        }
+    }
+
+    Button {
+        width: 100%;
+        text: "Scan to receive";
+        start-icon: Images.icon("scan-qr", 24px);
+        size: ControlSize.lg;
+        full-width: true;
+        clicked => {
+            Callbacks.scan-receive();
+        }
+    }
+}
+
+// Send sheet: the note as a QR for the receiver to scan.
+export component SendSheet inherits Rectangle {
+    background: Theme.palette-background;
+
+    // Swallow touches meant for the list underneath.
+    TouchArea { }
+
+    Page {
+        ScreenHeader {
+            title: "Send";
+            back => {
+                Callbacks.close-note();
+            }
+        }
+
+        Card {
+            width: 100%;
+            title: AppState.notes[AppState.selected].amount;
+            subtitle: AppState.notes[AppState.selected].mint;
+        }
+
+        // White quiet zone in both themes so any camera can read the code.
+        Rectangle {
+            property <length> qr-size: min(root.width - 2 * Theme.spacing-xl, 340px) - 2 * Theme.spacing-lg;
+            height: qr-size + 2 * Theme.spacing-lg;
+            background: white;
+            border-radius: Theme.radius-default;
+
+            Image {
+                width: qr-size;
+                height: qr-size;
+                source: AppState.qr;
+                image-fit: contain;
+            }
+        }
+
+        Helper {
+            text: "Once the receiver has scanned it, mark it sent. Until then it stays in your wallet.";
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        Button {
+            width: 100%;
+            text: "Mark as sent";
+            variant: ButtonVariant.danger;
+            size: ControlSize.lg;
+            full-width: true;
+            clicked => {
+                Callbacks.mark-sent();
+            }
+        }
+    }
+}

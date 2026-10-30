@@ -1,0 +1,3 @@
+tar 0.4.46 from crates.io, with every `target_arch = "wasm32"` cfg widened to
+`any(target_arch = "wasm32", target_os = "xous")` so KeyOS takes the wasm (no unix fs metadata) paths.
+Pulled in by tract-nnef; the app never unpacks archives.

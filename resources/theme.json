@@ -1,0 +1,5 @@
+{
+  "id": "app_theme",
+  "name": "my-app",
+  "parent": "base_theme"
+}

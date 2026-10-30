@@ -1,0 +1,104 @@
+// SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: MIT
+
+import {
+    Theme,
+    UISize,
+    Images,
+    ControlSize,
+} from "@ui/theme.slint";
+import { SegmentedControl } from "@ui/segmented_control.slint";
+import { Toast, ToastVariant } from "@ui/toast.slint";
+import {
+    Callbacks,
+    AppState,
+    NoteItem,
+    PenlockState,
+    PenlockScreen,
+    PhraseStatus,
+    ShareRow,
+    ShareSheet,
+} from "callbacks.slint";
+import { Page } from "common.slint";
+import { WalletHome, SendSheet } from "wallet.slint";
+import { PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
+
+export {
+    Callbacks,
+    AppState,
+    NoteItem,
+    PenlockState,
+    PenlockScreen,
+    PhraseStatus,
+    ShareRow,
+    ShareSheet,
+    Theme,
+    Images,
+    ControlSize,
+    ToastVariant,
+}
+
+export component AppWindow inherits Window {
+    title: "Cashu and Penlock";
+    preferred-width: UISize.screen-width;
+    preferred-height: UISize.screen-height;
+    background: Theme.palette-background;
+
+    // Section homes, under the Wallet / Penlock switcher.
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: Theme.palette-background;
+
+        Page {
+            SegmentedControl {
+                options: ["Wallet", "Penlock"];
+                selected-index: AppState.section;
+                changed(index, _) => {
+                    AppState.section = index;
+                }
+            }
+
+            if AppState.section == 0: WalletHome {
+                vertical-stretch: 1;
+            }
+
+            if AppState.section == 1: PenlockHome {
+                vertical-stretch: 1;
+            }
+        }
+    }
+
+    // Flows pushed over the homes. Each is opaque and takes the whole screen.
+    if AppState.selected >= 0: SendSheet {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if PenlockState.screen != PenlockScreen.home: Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: Theme.palette-background;
+
+        // Swallow touches meant for the home underneath.
+        TouchArea { }
+
+        if PenlockState.screen == PenlockScreen.enter: EnterPhrase { }
+        if PenlockState.screen == PenlockScreen.shares: ShareSheets { }
+        if PenlockState.screen == PenlockScreen.scan: ScanShares {
+            width: parent.width;
+            height: parent.height;
+        }
+        if PenlockState.screen == PenlockScreen.result: Recovered { }
+    }
+
+    if AppState.toast != "": Toast {
+        width: parent.width;
+        height: parent.height;
+        message: AppState.toast;
+        variant: AppState.toast-variant;
+        dismissed => {
+            Callbacks.dismiss-toast();
+        }
+    }
+}

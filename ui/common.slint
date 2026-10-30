@@ -1,0 +1,61 @@
+// SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+// SPDX-License-Identifier: MIT
+
+import { Theme, UISize, Images } from "@ui/theme.slint";
+import { IconButton, IconButtonVariant } from "@ui/icon_button.slint";
+
+export component SectionLabel inherits Text {
+    color: Theme.palette-muted;
+    font-family: Theme.font-primary;
+    font-size: Theme.font-size-label;
+    font-weight: Theme.font-weight-semibold;
+    horizontal-alignment: center;
+}
+
+export component Helper inherits Text {
+    color: Theme.palette-muted;
+    font-family: Theme.font-primary;
+    font-size: Theme.font-size-helper;
+    horizontal-alignment: center;
+    wrap: word-wrap;
+}
+
+// Back arrow and centred title: the header of every screen pushed from a section's home.
+export component ScreenHeader {
+    in property <string> title;
+    callback back();
+    height: 48px;
+
+    IconButton {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        icon: Images.icon("arrow-left", 24px);
+        variant: IconButtonVariant.ghost;
+        clicked => {
+            root.back();
+        }
+    }
+
+    Text {
+        x: 56px;
+        width: parent.width - 112px;
+        height: parent.height;
+        text: root.title;
+        color: Theme.palette-foreground;
+        font-family: Theme.font-primary;
+        font-size: Theme.font-size-body;
+        font-weight: Theme.font-weight-semibold;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+// Page frame shared by every screen: status-bar clearance and the standard gutters.
+export component Page inherits VerticalLayout {
+    padding-left: Theme.spacing-xl;
+    padding-right: Theme.spacing-xl;
+    padding-top: Theme.spacing-lg + UISize.control-center-status-bar-height;
+    padding-bottom: Theme.spacing-xl;
+    spacing: Theme.spacing-lg;
+}

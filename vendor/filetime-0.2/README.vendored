@@ -1,0 +1,3 @@
+filetime 0.2.29 from crates.io, with target_os = "xous" routed to its existing wasm stub (one cfg in
+src/lib.rs). Pulled in by tar <- tract-nnef; KeyOS has no unix file times, and the app loads models from
+memory, so the stub is never reached.
