@@ -1,0 +1,84 @@
+1
+00:00:03,500 --> 00:00:08,898
+Penlock is an app for Passport Prime. This is the KeyOS simulator.
+
+2
+00:00:08,898 --> 00:00:13,557
+Every launch opens with a warning about protecting your seed phrase.
+
+3
+00:00:13,557 --> 00:00:18,877
+Back up a seed phrase on paper, or sign with cosigners. It all runs offline, and nothing is saved.
+
+4
+00:00:18,877 --> 00:00:21,794
+Typos are flagged word by word. This is a public test phrase, never a real wallet.
+
+5
+00:00:21,794 --> 00:00:23,344
+Type a 12 or 24-word phrase. Each word appears numbered, so you can check it.
+
+6
+00:00:23,344 --> 00:00:27,576
+The BIP39 checksum is verified as you type.
+
+7
+00:00:27,576 --> 00:00:38,015
+Penlock splits it into three paper shares. Any two rebuild the phrase. One alone reveals nothing.
+
+8
+00:00:38,015 --> 00:00:42,237
+Copy each share onto its own strip, and keep the strips in different places.
+
+9
+00:00:42,237 --> 00:00:47,442
+Restoring scans any two strips, on the device. Camera picture blanked for this recording.
+
+10
+00:00:47,442 --> 00:00:52,695
+Handwritten phrases are read on the device too. You always check them against the paper.
+
+11
+00:00:52,695 --> 00:00:56,394
+Now the new part: two shares can act as two signers.
+
+12
+00:00:56,394 --> 00:00:57,137
+In the simulator the share is pasted. A Passport scans its strip instead.
+
+13
+00:00:57,137 --> 00:01:02,610
+Each share derives its own signing key. Neither device sees the other share, or the phrase.
+
+14
+00:01:02,610 --> 00:01:07,263
+The Passport shows its public key as a QR code. It can't spend.
+
+15
+00:01:07,263 --> 00:01:12,476
+A second signer joins. Here that is a laptop tool holding share 2, standing in for a phone.
+
+16
+00:01:12,476 --> 00:01:18,777
+Both devices derive the same shared address, without sending each other anything secret.
+
+17
+00:01:18,777 --> 00:01:25,434
+The Passport shows exactly what you are approving: destination, change and fee.
+
+18
+00:01:25,434 --> 00:01:30,376
+Round 1: each signer adds a one-time nonce. On a Passport this moves by QR code.
+
+19
+00:01:30,376 --> 00:01:34,495
+Round 2: each signer adds a partial signature.
+
+20
+00:01:34,495 --> 00:01:38,599
+The signatures join into one. On chain it looks like an ordinary single signature.
+
+21
+00:01:38,599 --> 00:01:42,745
+Bitcoin Core accepted and confirmed this exact transaction on a private test network.
+

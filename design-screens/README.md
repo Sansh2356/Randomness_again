@@ -19,10 +19,11 @@ staged, since reaching them needs paper strips. Colours are corrected: the drive
 | 31 | Error message |
 | 32 | Home with a wallet open |
 | 33 | Scan a QR code, in the app |
+| 34–36 | Settings: mainnet on, wallet on mainnet, the toggle locked while a wallet is open |
+| 37 | Review on mainnet |
 
 Built with the Prime Kit design system (dark theme). Differences from the Penlock redesign canvas:
 
-- The camera view is a full-width square, because the camera draws a fixed 480 × 480 picture.
 - "Sign with share N" stays disabled until all three shares are viewed, because it clears the others.
 - The paste screen's buttons sit under the field, because the keyboard covers the bottom of the screen.
 - The review headline is 56px rather than 64px, so long amounts stay on screen.

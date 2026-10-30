@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: MIT
 
+import { Dialog } from "@ui/dialog.slint";
 import { SlideToConfirm } from "@ui/slide_to_confirm.slint";
 import { TextArea } from "@ui/textarea.slint";
 import { AddressRow, Callbacks, QrKind, WalletState } from "callbacks.slint";
@@ -14,6 +15,7 @@ import {
     Eyebrow,
     Footer,
     Heading,
+    Icon,
     IconTile,
     Icons,
     Label,
@@ -25,10 +27,189 @@ import {
     ValueWell,
 } from "common.slint";
 
+// Real bitcoin is a choice someone makes on purpose, knowing what backs it.
+export component MainnetWarning inherits Rectangle {
+    // Dialog only blocks touches on its backdrop when it's dismissable.
+    TouchArea { }
+
+    Dialog {
+        width: parent.width;
+        height: parent.height;
+        dismissable: false;
+        fill-container: true;
+        backdrop-color: Prime.scrim;
+        panel-background: Prime.surface-raised;
+        panel-border-color: Prime.danger;
+        panel-padding: 24px;
+        border-radius: 24px;
+
+        HorizontalLayout {
+            alignment: start;
+
+            Rectangle {
+                width: 48px;
+                height: 48px;
+                border-radius: 24px;
+                background: Prime.danger-soft;
+
+                Icon {
+                    source: Icons.alert;
+                    tint: Prime.danger;
+                }
+            }
+        }
+
+        Eyebrow {
+            text: "REAL BITCOIN";
+            color: Prime.danger;
+        }
+
+        Text {
+            text: "Use mainnet?";
+            color: Prime.ink;
+            font-family: Prime.display-font;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        Body {
+            text: "This signing code hasn't been audited. A mistake or a bug can lose your bitcoin for good. Only use a new seed, with an amount you can afford to lose.";
+        }
+
+        Action {
+            height: 52px;
+            text: "Use mainnet";
+            clicked => {
+                WalletState.mainnet = true;
+                WalletState.confirm-mainnet = false;
+            }
+        }
+
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Stay on signet";
+            clicked => {
+                WalletState.confirm-mainnet = false;
+            }
+        }
+    }
+}
+
+component Toggle {
+    in property <bool> on;
+    in property <bool> disabled;
+    callback toggled();
+    width: 56px;
+    height: 32px;
+    opacity: root.disabled ? 0.4 : 1;
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.on ? Prime.copper : Prime.surface-sunken;
+        border-width: root.on ? 0 : 1px;
+        border-color: Prime.line-strong;
+
+        Rectangle {
+            x: root.on ? parent.width - self.width - 4px : 4px;
+            y: 4px;
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            background: root.on ? Prime.on-copper : Prime.ink-muted;
+        }
+    }
+
+    TouchArea {
+        enabled: !root.disabled;
+        clicked => {
+            root.toggled();
+        }
+    }
+}
+
+export component AppSettings inherits Screen {
+    ScreenHeader {
+        title: "Settings";
+        back => {
+            Callbacks.penlock-close();
+        }
+    }
+
+    Content {
+        spacing: 12px;
+
+        Eyebrow {
+            text: "NETWORK";
+        }
+
+        Rectangle {
+            border-radius: 12px;
+            background: WalletState.mainnet ? Prime.danger-soft : Prime.surface-raised;
+            border-width: 1px;
+            border-color: WalletState.mainnet ? Prime.danger : Prime.line;
+            height: network.preferred-height;
+
+            network := HorizontalLayout {
+                padding: 16px;
+                spacing: 16px;
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    alignment: center;
+                    spacing: 2px;
+
+                    Heading {
+                        text: "Mainnet";
+                    }
+
+                    Label {
+                        text: WalletState.mainnet ? "On. New wallets use real bitcoin." : "Off. New wallets use signet test coins.";
+                    }
+                }
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Toggle {
+                        on: WalletState.mainnet;
+                        disabled: WalletState.loaded;
+                        toggled => {
+                            if WalletState.mainnet {
+                                WalletState.mainnet = false;
+                            } else {
+                                WalletState.confirm-mainnet = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if WalletState.loaded: Note {
+            icon: Icons.lock;
+            tint: Prime.warning;
+            text: "Lock the wallet to change network. Each network has its own keys.";
+        }
+
+        if WalletState.mainnet: Note {
+            icon: Icons.alert;
+            tint: Prime.danger;
+            text: "This signing code hasn't been audited. Use a new seed and an amount you can afford to lose.";
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+    }
+}
+
 // Where the signing key comes from.
 export component WalletLoad inherits Screen {
     ScreenHeader {
         title: "MuSig wallet";
+        trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
+        pill: true;
+        pill-caution: WalletState.mainnet;
         back => {
             Callbacks.penlock-close();
         }
@@ -148,8 +329,9 @@ export component WalletHome inherits Screen {
 
     ScreenHeader {
         title: "MuSig wallet";
-        trailing: "SIGNET";
+        trailing: WalletState.mainnet ? "MAINNET" : "SIGNET";
         pill: true;
+        pill-caution: WalletState.mainnet;
         back => {
             Callbacks.penlock-close();
         }
@@ -407,7 +589,7 @@ export component WalletQr inherits Screen {
                 }
 
                 Caption {
-                    text: "Signet · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}";
+                    text: "\{WalletState.mainnet ? "Mainnet" : "Signet"} · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}";
                     wrap: no-wrap;
                 }
             }
@@ -591,7 +773,8 @@ export component WalletReview inherits Screen {
                 spacing: 8px;
 
                 Eyebrow {
-                    text: "YOU'RE SENDING";
+                    text: WalletState.mainnet ? "YOU'RE SENDING REAL BITCOIN" : "YOU'RE SENDING";
+                    color: WalletState.mainnet ? Prime.danger : Prime.copper;
                 }
 
                 HorizontalLayout {
@@ -674,7 +857,7 @@ export component WalletReview inherits Screen {
         SlideToConfirm {
             height: 64px;
             thumb-width: 54px;
-            hint: "Slide to approve";
+            hint: WalletState.mainnet ? "Slide to send real bitcoin" : "Slide to approve";
             label: "";
             confirmed-label: "";
             control-height: 64px;

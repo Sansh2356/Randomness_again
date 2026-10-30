@@ -104,6 +104,23 @@ export component SeedWarning inherits Rectangle {
     }
 }
 
+// Sits over the home's top corner.
+export component SettingsButton {
+    width: 48px;
+    height: 48px;
+
+    Icon {
+        source: Icons.settings;
+        tint: Prime.ink-muted;
+    }
+
+    TouchArea {
+        clicked => {
+            PenlockState.screen = PenlockScreen.settings;
+        }
+    }
+}
+
 export component PenlockHome inherits Screen {
     VerticalLayout {
         vertical-stretch: 1;
@@ -713,11 +730,10 @@ export component ShareSheets inherits Screen {
     }
 }
 
-// The corners of the scan frame.
+// The corners of the scan frame: a rounded outline, with all but its corners cut away.
 component FrameCorners {
     in property <color> tint;
-    property <length> arm: 36px;
-    property <length> weight: 3px;
+    property <length> arm: 40px;
 
     for corner in [
         { right: false, bottom: false },
@@ -725,27 +741,20 @@ component FrameCorners {
         { right: false, bottom: true },
         { right: true, bottom: true },
     ]: Rectangle {
-        x: 0;
-        y: 0;
-        width: root.width;
-        height: root.height;
+        x: corner.right ? root.width - root.arm : 0;
+        y: corner.bottom ? root.height - root.arm : 0;
+        width: root.arm;
+        height: root.arm;
+        clip: true;
 
         Rectangle {
-            x: corner.right ? parent.width - root.arm : 0;
-            y: corner.bottom ? parent.height - root.weight : 0;
-            width: root.arm;
-            height: root.weight;
-            border-radius: 1.5px;
-            background: root.tint;
-        }
-
-        Rectangle {
-            x: corner.right ? parent.width - root.weight : 0;
-            y: corner.bottom ? parent.height - root.arm : 0;
-            width: root.weight;
-            height: root.arm;
-            border-radius: 1.5px;
-            background: root.tint;
+            x: corner.right ? -root.arm : 0;
+            y: corner.bottom ? -root.arm : 0;
+            width: 2 * root.arm;
+            height: 2 * root.arm;
+            border-width: 3px;
+            border-radius: 14px;
+            border-color: root.tint;
         }
     }
 }
@@ -753,7 +762,7 @@ component FrameCorners {
 component ShareTile {
     in property <string> name;
     in property <bool> read;
-    height: 56px;
+    height: 64px;
 
     Rectangle {
         border-radius: 12px;
@@ -813,12 +822,12 @@ export component ScanShares inherits Rectangle {
         }
     }
 
-    // A full-width square: the camera draws a fixed 480 × 480 picture at this position.
     viewfinder := Rectangle {
-        x: 0;
+        x: Prime.gutter;
         y: PenlockState.viewfinder-y;
-        width: parent.width;
-        height: self.width;
+        width: parent.width - 2 * Prime.gutter;
+        height: 380px;
+        border-radius: 24px;
         background: Prime.surface-sunken;
         clip: true;
 
@@ -831,8 +840,10 @@ export component ScanShares inherits Rectangle {
 
         // A share strip is tall and narrow: frame it that way. A phrase fills the page.
         FrameCorners {
-            width: parent.width * (root.phrase ? 0.92 : root.qr ? 0.76 : 0.6);
-            height: parent.height * (root.qr ? 0.76 : 0.84);
+            x: root.phrase ? 24px : root.qr ? 66px : 106px;
+            y: root.phrase || root.qr ? 32px : 40px;
+            width: parent.width - 2 * self.x;
+            height: parent.height - self.y - (root.phrase || root.qr ? 64px : 60px);
             tint: PenlockState.scan-hit ? Prime.success : Prime.ink;
         }
 
@@ -876,7 +887,7 @@ export component ScanShares inherits Rectangle {
                     color: PenlockState.scan-hit ? Prime.success : Prime.ink;
                     font-family: Prime.text-font;
                     font-size: 14px;
-                    font-weight: 500;
+                    font-weight: PenlockState.scan-hit ? 600 : 500;
                     vertical-alignment: center;
                     overflow: elide;
                 }
@@ -886,11 +897,10 @@ export component ScanShares inherits Rectangle {
 
     VerticalLayout {
         x: Prime.gutter;
-        y: viewfinder.y + viewfinder.height + 16px;
+        y: viewfinder.y + viewfinder.height + 24px;
         width: parent.width - 2 * Prime.gutter;
-        height: parent.height - self.y - 24px;
-        alignment: start;
-        spacing: 8px;
+        height: parent.height - self.y - 32px;
+        spacing: 12px;
 
         if root.qr: Note {
             icon: Icons.frame;
@@ -905,7 +915,7 @@ export component ScanShares inherits Rectangle {
 
             Code {
                 text: root.phrase ? "\{PenlockState.words-read}" : "\{root.read-count} of 2";
-                color: PenlockState.draft-ready && PenlockState.draft-complete ? Prime.success : Prime.ink;
+                color: root.phrase && PenlockState.draft-complete ? Prime.success : Prime.ink;
             }
         }
 
@@ -924,18 +934,12 @@ export component ScanShares inherits Rectangle {
             color: PenlockState.scan-failed ? Prime.danger : Prime.ink-muted;
         }
 
-        if !root.phrase && !root.qr && PenlockState.can-sign-share: Action {
-            kind: ActionKind.secondary;
-            text: "Sign with share \{PenlockState.read-share}";
-            has-icon: true;
-            icon: Icons.pen;
-            clicked => {
-                Callbacks.sign-with-scanned();
-            }
+        if !root.phrase && !root.qr && PenlockState.scan-error == "": Label {
+            text: PenlockState.can-sign-share ? "Scan one more strip to rebuild your phrase, or sign with share \{PenlockState.read-share} alone." : "Scan any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
         }
 
         if root.phrase && PenlockState.scan-error == "" && !PenlockState.draft-ready: VerticalLayout {
-            spacing: 4px;
+            spacing: 10px;
 
             Note {
                 icon: Icons.frame;
@@ -945,6 +949,24 @@ export component ScanShares inherits Rectangle {
             Note {
                 icon: Icons.sun;
                 text: "Use good, even light.";
+            }
+        }
+
+        if root.phrase && PenlockState.scan-error == "" && PenlockState.draft-ready: Label {
+            text: "Next, check every word against your paper before you make shares.";
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+
+        if !root.phrase && !root.qr && PenlockState.can-sign-share: Action {
+            kind: ActionKind.secondary;
+            text: "Sign with share \{PenlockState.read-share}";
+            has-icon: true;
+            icon: Icons.pen;
+            clicked => {
+                Callbacks.sign-with-scanned();
             }
         }
 

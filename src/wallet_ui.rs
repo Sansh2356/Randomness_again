@@ -8,6 +8,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use bitcoin::psbt::Psbt;
+use bitcoin::Network;
 use penlock::Share;
 use slint_keyos_platform::slint::{self, Color, ComponentHandle, Model, ModelRc, VecModel};
 
@@ -102,8 +103,16 @@ impl Wallet {
         });
     }
 
+    fn network(&self) -> Network {
+        if self.ui().global::<WalletState>().get_mainnet() {
+            Network::Bitcoin
+        } else {
+            Network::Signet
+        }
+    }
+
     fn open(&self, phrase: &str) {
-        match Signer::from_phrase(phrase) {
+        match Signer::from_phrase(phrase, self.network()) {
             Ok(signer) => {
                 *self.signer.borrow_mut() = Some(signer);
                 self.address.set(0);
@@ -126,7 +135,7 @@ impl Wallet {
         let (header, rows) = tokens.split_at(tokens.len().min(4));
         let lines = format!("{}\n{}", header.join(" "), rows.join("\n"));
         let signer = Share::parse(&lines, None).map_err(|e| format!("That isn't a share: {e}")).and_then(|share| {
-            Signer::from_share(share.index().number(), &rows.concat()).map(|signer| (share, signer))
+            Signer::from_share(share.index().number(), &rows.concat(), self.network()).map(|signer| (share, signer))
         });
         match signer {
             Ok((share, signer)) => {

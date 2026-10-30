@@ -10,7 +10,7 @@ export global AppState {
     in property <ToastVariant> toast-variant;
 }
 
-export enum PenlockScreen { home, enter, shares, scan, result, wallet-load, wallet, wallet-qr, wallet-input, wallet-review }
+export enum PenlockScreen { home, enter, shares, scan, result, settings, wallet-load, wallet, wallet-qr, wallet-input, wallet-review }
 
 // One worksheet row: six symbols, the two shaded checksum boxes first.
 export struct ShareRow {
@@ -49,7 +49,7 @@ export global PenlockState {
     in property <[ShareSheet]> shares;
 
     // Where the camera picture sits on screen; Rust passes it to ShowCamera.
-    out property <length> viewfinder-y: UISize.control-center-status-bar-height + 64px;
+    out property <length> viewfinder-y: UISize.control-center-status-bar-height + 72px;
     in property <image> preview;
     in property <bool> camera-live;
     in property <bool> reader-ready;
@@ -94,6 +94,9 @@ export struct SendRow {
 export enum QrKind { key, address, nonces, partial, final-tx }
 
 export global WalletState {
+    // Which network a new wallet uses. Mainnet is only ever a confirmed choice.
+    in-out property <bool> mainnet;
+    in-out property <bool> confirm-mainnet;
     in property <bool> loaded;
     in property <string> fingerprint;
     // What the key came from: "Seed phrase" or "Share 1".

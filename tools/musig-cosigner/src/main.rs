@@ -4,6 +4,7 @@
 // A laptop cosigner for the MuSig wallet, built on the same signer as the app. It keeps its nonces in
 // memory, so it runs as one long session reading commands from stdin:
 //
+//   COSIGNER_NETWORK=mainnet ...                         sign on mainnet rather than signet
 //   COSIGNER_PHRASE="twelve test words" cargo run       one participant from a phrase
 //   COSIGNER_SHARE="$(cat share-2.txt)" cargo run        one participant from a Penlock share
 //   cargo run -- split "twelve test words" DIRECTORY     write share-1.txt to share-3.txt
@@ -17,7 +18,7 @@
 //   new <txid> <vout> <sats> <index> <to script hex> <send sats> <fee sats>
 //   <any PSBT>                      take the next step, approving automatically
 //
-// Use throwaway phrases and shares. This is for testing, on signet.
+// Use throwaway phrases and shares. This is for testing and hasn't been audited.
 
 #[path = "../../../src/musig.rs"]
 mod musig;
@@ -29,7 +30,7 @@ use std::str::FromStr;
 use bitcoin::absolute::LockTime;
 use bitcoin::psbt::Psbt;
 use bitcoin::transaction::Version;
-use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{Amount, Network, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
 use musig::{Signer, Step, CHANGE};
 use penlock::word::{Word, WORD_LEN};
 use penlock::{Share, ShareCount, ShareIndex, Symbol};
@@ -80,13 +81,17 @@ fn share_from_file(path: &str) -> Share {
 }
 
 fn signer_from_env() -> Signer {
+    let network = match std::env::var("COSIGNER_NETWORK").as_deref() {
+        Ok("mainnet") => Network::Bitcoin,
+        _ => Network::Signet,
+    };
     if let Ok(text) = std::env::var("COSIGNER_SHARE") {
         let share = Share::parse(&text, None).expect("a share");
         let symbols: String = text.lines().skip(1).map(str::trim).collect();
-        return Signer::from_share(share.index().number(), &symbols).expect("a signer");
+        return Signer::from_share(share.index().number(), &symbols, network).expect("a signer");
     }
     let phrase = std::env::var("COSIGNER_PHRASE").expect("set COSIGNER_SHARE or COSIGNER_PHRASE");
-    Signer::from_phrase(&phrase).expect("a valid phrase")
+    Signer::from_phrase(&phrase, network).expect("a valid phrase")
 }
 
 fn new_psbt(signer: &Signer, args: &[&str]) -> Result<Psbt, String> {

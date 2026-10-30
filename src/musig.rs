@@ -13,7 +13,7 @@
 // fingerprint is how a person notices.
 //
 // Only the account key and the public keys of the cosigners are held, and only in memory.
-// ponytail: signet only. This hasn't been audited; add mainnet paths once it has.
+// Signet is the default. Mainnet is the person's explicit choice: this code hasn't been audited.
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -28,9 +28,9 @@ use bitcoin::{Address, Network, NetworkKind, ScriptBuf, TapSighashType, TxOut, T
 use musig2::secp::{MaybeScalar, Point, Scalar};
 use musig2::{AggNonce, KeyAggContext, LiftedSignature, PartialSignature, PubNonce, SecNonce};
 
-pub const NETWORK: Network = Network::Signet;
 pub const NOT_A_PSBT: &str = "That isn't a PSBT";
-const ACCOUNT_PATH: &str = "m/86'/1'/0'";
+// A fee above this is refused outright, whatever the rate: it's a mistake or an attack.
+pub const FEE_CEILING: u64 = 1_000_000;
 pub const RECEIVE: u32 = 0;
 pub const CHANGE: u32 = 1;
 // How many addresses per chain are matched against a PSBT.
@@ -85,6 +85,7 @@ struct Slot {
 
 pub struct Signer {
     secp: Secp256k1<All>,
+    network: Network,
     account: Xpriv,
     xpub: Xpub,
     cosigners: Vec<Xpub>,
@@ -110,27 +111,29 @@ fn participant_key(kind: u8, participant: &[u8; COMPRESSED], plain: &[u8; COMPRE
 }
 
 impl Signer {
-    pub fn from_phrase(phrase: &str) -> Result<Self, String> {
+    pub fn from_phrase(phrase: &str, network: Network) -> Result<Self, String> {
         let words = phrase.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
         let mnemonic = Mnemonic::parse_in_normalized(Language::English, &words).map_err(err)?;
-        Self::from_seed(&mnemonic.to_seed(""))
+        Self::from_seed(&mnemonic.to_seed(""), network)
     }
 
     /// A signer of its own for one Penlock share: its number and its symbols, row after row.
-    pub fn from_share(number: u8, symbols: &str) -> Result<Self, String> {
+    pub fn from_share(number: u8, symbols: &str, network: Network) -> Result<Self, String> {
         let mut engine = hmac::HmacEngine::<sha512::Hash>::new(SHARE_KEY_TAG);
         engine.input(&[number]);
         engine.input(symbols.as_bytes());
-        Self::from_seed(hmac::Hmac::<sha512::Hash>::from_engine(engine).as_byte_array())
+        Self::from_seed(hmac::Hmac::<sha512::Hash>::from_engine(engine).as_byte_array(), network)
     }
 
-    fn from_seed(seed: &[u8]) -> Result<Self, String> {
+    fn from_seed(seed: &[u8], network: Network) -> Result<Self, String> {
         let secp = Secp256k1::new();
-        let master = Xpriv::new_master(NETWORK, seed).map_err(err)?;
-        let path = DerivationPath::from_str(ACCOUNT_PATH).map_err(err)?;
+        let master = Xpriv::new_master(network, seed).map_err(err)?;
+        // BIP86: mainnet's coin type is 0, and every test network's is 1.
+        let coin = if network == Network::Bitcoin { 0 } else { 1 };
+        let path = DerivationPath::from_str(&format!("m/86'/{coin}'/0'")).map_err(err)?;
         let account = master.derive_priv(&secp, &path).map_err(err)?;
         let xpub = Xpub::from_priv(&secp, &account);
-        Ok(Self { secp, account, xpub, cosigners: Vec::new(), scripts: BTreeMap::new(), pending: None })
+        Ok(Self { secp, network, account, xpub, cosigners: Vec::new(), scripts: BTreeMap::new(), pending: None })
     }
 
     pub fn xpub(&self) -> String { self.xpub.to_string() }
@@ -141,8 +144,8 @@ impl Signer {
 
     pub fn add_cosigner(&mut self, text: &str) -> Result<(), String> {
         let xpub = Xpub::from_str(text.trim()).map_err(|_| "That isn't an extended public key".to_string())?;
-        if xpub.network != NetworkKind::Test {
-            return Err("That key isn't for signet".into());
+        if xpub.network != NetworkKind::from(self.network) {
+            return Err("That key is for a different network".into());
         }
         if xpub == self.xpub {
             return Err("That's this wallet's own key".into());
@@ -198,7 +201,7 @@ impl Signer {
             return Err("Add a cosigner first".into());
         }
         let script = self.script(chain, index)?;
-        Ok(Address::from_script(&script, NETWORK).map_err(err)?.to_string())
+        Ok(Address::from_script(&script, self.network).map_err(err)?.to_string())
     }
 
     fn slot_of(&self, script: &ScriptBuf) -> Result<Slot, String> {
@@ -286,13 +289,16 @@ impl Signer {
                 change += sats;
                 continue;
             }
-            let to = match Address::from_script(&out.script_pubkey, NETWORK) {
+            let to = match Address::from_script(&out.script_pubkey, self.network) {
                 Ok(address) => address.to_string(),
                 Err(_) => "Unknown script".to_string(),
             };
             sends.push((to, sats));
         }
         let fee = spent.checked_sub(sent).ok_or("This transaction spends more than its inputs")?;
+        if fee > FEE_CEILING {
+            return Err(format!("A fee of {fee} sats is too high. Check the transaction."));
+        }
         Ok(Review { sends, change, fee })
     }
 
@@ -419,10 +425,11 @@ mod tests {
     const ALICE: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     const BOB: &str = "legal winner thank year wave sausage worth useful legal winner thank yellow";
     const OTHER: &str = "letter advice cage absurd amount doctor acoustic avoid letter advice cage above";
+    const NET: Network = Network::Signet;
 
     fn pair() -> (Signer, Signer) {
-        let mut alice = Signer::from_phrase(ALICE).unwrap();
-        let mut bob = Signer::from_phrase(BOB).unwrap();
+        let mut alice = Signer::from_phrase(ALICE, NET).unwrap();
+        let mut bob = Signer::from_phrase(BOB, NET).unwrap();
         let (a, b) = (alice.xpub(), bob.xpub());
         alice.add_cosigner(&b).unwrap();
         bob.add_cosigner(&a).unwrap();
@@ -542,7 +549,7 @@ mod tests {
         alice.add_nonces(&mut psbt).unwrap();
         let mut replaced = spend(&alice);
         bob.add_nonces(&mut replaced).unwrap();
-        let mut other = Signer::from_phrase(ALICE).unwrap();
+        let mut other = Signer::from_phrase(ALICE, NET).unwrap();
         other.add_cosigner(&bob.xpub()).unwrap();
         other.add_nonces(&mut replaced).unwrap();
         assert!(alice.add_signatures(&mut replaced).is_err());
@@ -558,7 +565,7 @@ mod tests {
 
         let mut swapped = spend(&alice);
         let slot = alice.slot(RECEIVE, 0).unwrap();
-        let carol = Signer::from_phrase(OTHER).unwrap().slot_key();
+        let carol = Signer::from_phrase(OTHER, NET).unwrap().slot_key();
         let list = [slot.pubkey, carol].concat();
         swapped.inputs[0].unknown.insert(field_key(IN_PARTICIPANTS, slot.plain.to_vec()), list);
         assert!(alice.inspect(&swapped).is_err());
@@ -566,12 +573,12 @@ mod tests {
 
     #[test]
     fn shares_sign_as_separate_participants() {
-        let mut one = Signer::from_share(1, "ABCDEF").unwrap();
-        let mut two = Signer::from_share(2, "GHIJKL").unwrap();
+        let mut one = Signer::from_share(1, "ABCDEF", NET).unwrap();
+        let mut two = Signer::from_share(2, "GHIJKL", NET).unwrap();
         let (a, b) = (one.xpub(), two.xpub());
         assert_ne!(a, b);
-        assert_eq!(a, Signer::from_share(1, "ABCDEF").unwrap().xpub(), "a share always gives its key");
-        assert_ne!(a, Signer::from_share(1, "ABCDEG").unwrap().xpub(), "one misread symbol is another key");
+        assert_eq!(a, Signer::from_share(1, "ABCDEF", NET).unwrap().xpub(), "a share always gives its key");
+        assert_ne!(a, Signer::from_share(1, "ABCDEG", NET).unwrap().xpub(), "one misread symbol is another key");
         one.add_cosigner(&b).unwrap();
         two.add_cosigner(&a).unwrap();
         let mut psbt = spend(&one);
@@ -580,12 +587,65 @@ mod tests {
     }
 
     #[test]
+    fn mainnet_follows_bip86() {
+        // The account key from BIP86's own test vectors.
+        let main = Signer::from_phrase(ALICE, Network::Bitcoin).unwrap();
+        assert_eq!(
+            main.xpub(),
+            "xpub6BgBgsespWvERF3LHQu6CnqdvfEvtMcQjYrcRzx53QJjSxarj2afYWcLteoGVky7D3UKDP9QyrLprQ3VCECoY49yfdDEHGCtMMj92pReUsQ"
+        );
+        assert_ne!(main.fingerprint(), Signer::from_phrase(ALICE, NET).unwrap().fingerprint());
+    }
+
+    #[test]
+    fn mainnet_signers_spend_to_mainnet_addresses() {
+        let mut alice = Signer::from_phrase(ALICE, Network::Bitcoin).unwrap();
+        let mut bob = Signer::from_phrase(BOB, Network::Bitcoin).unwrap();
+        let (a, b) = (alice.xpub(), bob.xpub());
+        alice.add_cosigner(&b).unwrap();
+        bob.add_cosigner(&a).unwrap();
+        assert!(alice.address(RECEIVE, 0).unwrap().starts_with("bc1p"));
+        assert_eq!(alice.address(RECEIVE, 0).unwrap(), bob.address(RECEIVE, 0).unwrap());
+        let mut psbt = spend(&alice);
+        let Ok(Step::Nonce(review)) = alice.inspect(&psbt) else { panic!() };
+        assert!(review.sends[0].0.starts_with("bc1p"));
+        sign_round(&mut alice, &mut bob, &mut psbt);
+        alice.finalize(&mut psbt).unwrap();
+    }
+
+    #[test]
+    fn networks_cannot_mix() {
+        let mut main = Signer::from_phrase(ALICE, Network::Bitcoin).unwrap();
+        let test_key = Signer::from_phrase(BOB, NET).unwrap().xpub();
+        assert!(main.add_cosigner(&test_key).is_err());
+        let mut signet = Signer::from_phrase(ALICE, NET).unwrap();
+        let main_key = Signer::from_phrase(BOB, Network::Bitcoin).unwrap().xpub();
+        assert!(signet.add_cosigner(&main_key).is_err());
+    }
+
+    #[test]
+    fn absurd_fees_are_refused() {
+        let (alice, _) = pair();
+        let change = alice.script(CHANGE, 0).unwrap();
+        let ceiling = unsigned(
+            &[(alice.script(RECEIVE, 0).unwrap(), FEE_CEILING + 1_000)],
+            vec![TxOut { value: Amount::from_sat(1_000), script_pubkey: change.clone() }],
+        );
+        assert!(alice.inspect(&ceiling).is_ok(), "exactly the ceiling is allowed");
+        let over = unsigned(
+            &[(alice.script(RECEIVE, 0).unwrap(), FEE_CEILING + 1_001)],
+            vec![TxOut { value: Amount::from_sat(1_000), script_pubkey: change }],
+        );
+        assert!(alice.inspect(&over).is_err());
+    }
+
+    #[test]
     fn cosigner_list_is_checked() {
-        let mut alice = Signer::from_phrase(ALICE).unwrap();
+        let mut alice = Signer::from_phrase(ALICE, NET).unwrap();
         assert!(alice.address(RECEIVE, 0).is_err());
         assert!(alice.add_cosigner("not a key").is_err());
         assert!(alice.add_cosigner(&alice.xpub()).is_err());
-        let bob = Signer::from_phrase(BOB).unwrap().xpub();
+        let bob = Signer::from_phrase(BOB, NET).unwrap().xpub();
         alice.add_cosigner(&bob).unwrap();
         assert!(alice.add_cosigner(&bob).is_err());
     }

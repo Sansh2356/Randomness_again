@@ -25,8 +25,8 @@ import {
     WalletState,
 } from "callbacks.slint";
 import { Notice, Prime } from "common.slint";
-import { SeedWarning, PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
-import { WalletLoad, WalletHome, WalletQr, WalletInput, WalletReview } from "wallet.slint";
+import { SeedWarning, SettingsButton, PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
+import { AppSettings, MainnetWarning, WalletLoad, WalletHome, WalletQr, WalletInput, WalletReview } from "wallet.slint";
 
 export {
     AddressChunk,
@@ -61,6 +61,11 @@ export component AppWindow inherits Window {
         background: Prime.surface;
 
         PenlockHome { }
+
+        SettingsButton {
+            x: parent.width - self.width - 12px;
+            y: Prime.status-bar + 16px;
+        }
     }
 
     // Flows pushed over the home. Each is opaque and takes the whole screen.
@@ -79,6 +84,7 @@ export component AppWindow inherits Window {
             height: parent.height;
         }
         if PenlockState.screen == PenlockScreen.result: Recovered { }
+        if PenlockState.screen == PenlockScreen.settings: AppSettings { }
         if PenlockState.screen == PenlockScreen.wallet-load: WalletLoad { }
         if PenlockState.screen == PenlockScreen.wallet: WalletHome { }
         if PenlockState.screen == PenlockScreen.wallet-qr: WalletQr { }
@@ -87,6 +93,11 @@ export component AppWindow inherits Window {
     }
 
     if !PenlockState.warning-accepted: SeedWarning {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if WalletState.confirm-mainnet: MainnetWarning {
         width: parent.width;
         height: parent.height;
     }

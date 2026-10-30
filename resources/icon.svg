@@ -1,14 +1,100 @@
-<svg width="110" height="110" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- No background element: the launcher composites its own 144 px badge
-       plate (silver ring, copper accent, near-black disc) behind this icon,
-       so any full-canvas fill would render as a slab over that plate.
-       The glyph is scaled to ~58% of the canvas and centred, per the icon
-       rules in the SDK migration guide. -->
-  <g transform="translate(13.88 24.67) scale(0.83)">
-    <rect x="48" y="58" width="160" height="124" rx="28" fill="#EEF2FF"/>
-    <path d="M72 156L105 121C111 115 121 115 127 121L143 137C148 142 156 143 162 139L184 122" stroke="#2563EB" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="98" cy="91" r="15" fill="#14B8A6"/>
-    <path d="M193 58L201 40L209 58L227 66L209 74L201 92L193 74L175 66L193 58Z" fill="#F59E0B"/>
-    <path d="M63 201H193" stroke="#EEF2FF" stroke-width="16" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="110" height="110">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f1e9"/>
+      <stop offset="1" stop-color="#d3c5b6"/>
+    </linearGradient>
+    <linearGradient id="nib" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5c2c1d"/>
+      <stop offset="0.16" stop-color="#9c5235"/>
+      <stop offset="0.4" stop-color="#eab49b"/>
+      <stop offset="0.5" stop-color="#ffe6d8"/>
+      <stop offset="0.6" stop-color="#d88b6d"/>
+      <stop offset="0.84" stop-color="#8f4a30"/>
+      <stop offset="1" stop-color="#4f2518"/>
+    </linearGradient>
+    <linearGradient id="nibShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.12"/>
+      <stop offset="0.35" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="collar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#110f10"/>
+      <stop offset="0.28" stop-color="#3a3435"/>
+      <stop offset="0.46" stop-color="#8a8384"/>
+      <stop offset="0.58" stop-color="#3a3435"/>
+      <stop offset="1" stop-color="#0d0b0c"/>
+    </linearGradient>
+    <linearGradient id="collarTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.28"/>
+      <stop offset="0.45" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6e3826"/>
+      <stop offset="0.45" stop-color="#f3c4ad"/>
+      <stop offset="1" stop-color="#6e3826"/>
+    </linearGradient>
+    <radialGradient id="keyGlow" cx="0.5" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#9af0f8"/>
+      <stop offset="0.35" stop-color="#4cc9d9"/>
+      <stop offset="1" stop-color="#0b2329"/>
+    </radialGradient>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <g id="strip">
+      <rect x="-32" y="-150" width="64" height="150" rx="7" fill="url(#paper)"/>
+      <rect x="-31.5" y="-149.5" width="63" height="149" rx="6.5" fill="none" stroke="#fff" stroke-opacity="0.55"/>
+      <g fill="#e3ad94" stroke="#b06c51" stroke-width="1">
+        <rect x="-25" y="-140" width="11" height="11" rx="2"/><rect x="-11" y="-140" width="11" height="11" rx="2"/>
+        <rect x="-25" y="-124" width="11" height="11" rx="2"/><rect x="-11" y="-124" width="11" height="11" rx="2"/>
+        <rect x="-25" y="-108" width="11" height="11" rx="2"/><rect x="-11" y="-108" width="11" height="11" rx="2"/>
+      </g>
+      <g fill="none" stroke="#988b82" stroke-width="1.1">
+        <rect x="4" y="-140" width="9" height="11" rx="2"/><rect x="15" y="-140" width="9" height="11" rx="2"/>
+        <rect x="4" y="-124" width="9" height="11" rx="2"/><rect x="15" y="-124" width="9" height="11" rx="2"/>
+        <rect x="4" y="-108" width="9" height="11" rx="2"/><rect x="15" y="-108" width="9" height="11" rx="2"/>
+      </g>
+      <g stroke="#6b5e56" stroke-width="1.6" stroke-linecap="round" fill="none">
+        <path d="M-22 -134.5h5M-8 -134.5h5M-22 -118.5h4M7 -118.5h3M-8 -102.5h5M17 -102.5h4"/>
+      </g>
+    </g>
+  </defs>
+
+  <!-- three share strips, fanned from a common base -->
+  <g filter="url(#drop)">
+    <g transform="translate(128 214) rotate(-30)"><use href="#strip"/></g>
+    <g transform="translate(128 214) rotate(30)"><use href="#strip"/></g>
+    <g transform="translate(128 206)"><use href="#strip"/></g>
+  </g>
+
+  <!-- pen nib -->
+  <g filter="url(#drop)">
+    <!-- nib body -->
+    <path d="M84 92 H172 C172 122 166 140 153 158 C142 174 134 198 128 232 C122 198 114 174 103 158 C90 140 84 122 84 92 Z" fill="url(#nib)"/>
+    <path d="M84 92 H172 C172 122 166 140 153 158 C142 174 134 198 128 232 C122 198 114 174 103 158 C90 140 84 122 84 92 Z" fill="url(#nibShade)"/>
+    <!-- engraved scroll lines -->
+    <path d="M95 102 C95 124 103 140 113 154" fill="none" stroke="#4f2518" stroke-opacity="0.5" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M161 102 C161 124 153 140 143 154" fill="none" stroke="#4f2518" stroke-opacity="0.5" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M96.5 101 C96.5 122 104 138 113.5 152" fill="none" stroke="#ffe6d8" stroke-opacity="0.4" stroke-width="0.9" stroke-linecap="round"/>
+    <path d="M159.5 101 C159.5 122 152 138 142.5 152" fill="none" stroke="#ffe6d8" stroke-opacity="0.25" stroke-width="0.9" stroke-linecap="round"/>
+    <!-- slit -->
+    <path d="M128 160 V228" stroke="#24120d" stroke-width="2.8" stroke-linecap="round"/>
+    <path d="M129.8 162 V224" stroke="#ffd9c6" stroke-opacity="0.5" stroke-width="0.9"/>
+    <!-- grip collar -->
+    <rect x="78" y="60" width="100" height="34" rx="9" fill="url(#collar)"/>
+    <rect x="78" y="60" width="100" height="34" rx="9" fill="url(#collarTop)"/>
+    <rect x="78" y="84" width="100" height="5" fill="url(#ring)"/>
+    <rect x="78" y="84" width="100" height="1" fill="#ffe6d8" opacity="0.6"/>
+    <!-- keyhole breather -->
+    <circle cx="128" cy="126" r="16" fill="#4cc9d9" opacity="0.28" filter="url(#glow)"/>
+    <path d="M128 110 a13 13 0 0 1 6.8 24.1 L139.5 160 H116.5 L121.2 134.1 A13 13 0 0 1 128 110 Z" fill="#160f0d"/>
+    <path d="M128 113.5 a9.5 9.5 0 0 1 4.9 17.6 L136 156.5 H120 L123.1 131.1 A9.5 9.5 0 0 1 128 113.5 Z" fill="url(#keyGlow)"/>
+    <path d="M128 110 a13 13 0 0 1 6.8 24.1 L139.5 160 H116.5 L121.2 134.1 A13 13 0 0 1 128 110 Z" fill="none" stroke="#ffe6d8" stroke-opacity="0.6" stroke-width="1.1"/>
+    <circle cx="124.5" cy="119" r="2.4" fill="#fff" opacity="0.85"/>
   </g>
 </svg>
