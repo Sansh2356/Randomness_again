@@ -350,7 +350,7 @@ impl Penlock {
     }
 
     /// Read a photo already on the device: sharper than the camera, so better for handwriting.
-    fn upload_photo(&self) {
+    fn upload_photo(&self, share: Option<ShareIndex>) {
         let options = SelectFileOptions::default()
             .with_allowed_extensions(AllowedExtensions::specific(["jpg", "jpeg", "png", "webp"]));
         let picked = select_file::<gui_permissions::GuiPermissions>(options);
@@ -385,7 +385,7 @@ impl Penlock {
             s.set_scan_failed(false);
             s.set_scan_status("Reading your photo…".into());
         });
-        if !self.reader(self.source.get()).offer_upload(photo) {
+        if !self.reader(self.source.get()).offer_upload(photo, share) {
             self.frozen.set(false);
             self.with_state(|s| s.set_photo_reading(false));
             self.upload_failed("Still reading the last photo. Try again in a moment.");
@@ -628,7 +628,11 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     });
     cb.on_upload_photo({
         let p = penlock.clone();
-        move || p.upload_photo()
+        move || p.upload_photo(None)
+    });
+    cb.on_upload_share({
+        let p = penlock.clone();
+        move |sheet| p.upload_photo(ShareIndex::new(sheet as u8 + 1))
     });
     cb.on_retake_photo({
         let p = penlock.clone();

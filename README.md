@@ -20,7 +20,7 @@ A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), w
 - **Create shares.** Split a 12- or 24-word phrase into three paper shares. Any two rebuild it, and one alone reveals
   nothing. Tap a share to see all its rows at once, or save a 12-word share as a PNG that Upload photo can read back.
   Saved shares go in a `penlock` folder, named with the share number and the date and time in UTC.
-- **Restore from shares.** Take or upload photos of two strips to rebuild the phrase.
+- **Restore from shares.** Tap a share to upload a strip, or take a photo. Any two strips rebuild the phrase, in any order.
 - **Read a written phrase.** Take or upload a photo of a handwritten phrase, then check every word of the draft against
   the paper. An uploaded photo reads better than the 480-pixel camera.
 - **MuSig wallet.** Sign taproot transactions with cosigners, using MuSig2 over QR codes. A key can come from a seed

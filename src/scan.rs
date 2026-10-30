@@ -40,10 +40,11 @@ pub enum Event {
     Nothing,
 }
 
-/// What a reader is handed: a camera frame, or an uploaded photo, still encoded.
+/// What a reader is handed: a camera frame, or an uploaded photo, still encoded. An upload carries the
+/// share that was tapped, which only names a strip whose own code can't be read.
 enum Job {
     Frame(RgbImage),
-    Upload(Vec<u8>),
+    Upload(Vec<u8>, Option<ShareIndex>),
 }
 
 pub struct Reader {
@@ -72,7 +73,9 @@ impl Reader {
     pub fn offer(&self, frame: RgbImage) -> bool { self.frames.try_send(Job::Frame(frame)).is_ok() }
 
     /// The same for an uploaded photo. Returns false if the reader is busy.
-    pub fn offer_upload(&self, photo: Vec<u8>) -> bool { self.frames.try_send(Job::Upload(photo)).is_ok() }
+    pub fn offer_upload(&self, photo: Vec<u8>, share: Option<ShareIndex>) -> bool {
+        self.frames.try_send(Job::Upload(photo, share)).is_ok()
+    }
 }
 
 fn read_shares(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
@@ -85,15 +88,18 @@ fn read_shares(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
     };
     let _ = events.send(Event::Ready);
     for job in jobs {
-        let read = match job {
-            Job::Frame(frame) => scanner.scan_rgb(&frame, ScanOptions::default()),
-            Job::Upload(photo) => scanner.scan(&photo, ScanOptions::default()),
+        let (read, tapped) = match job {
+            Job::Frame(frame) => (scanner.scan_rgb(&frame, ScanOptions::default()), None),
+            Job::Upload(photo, tapped) => (scanner.scan(&photo, ScanOptions::default()), tapped),
         };
         let event = match read {
             Ok(result) => result
                 .shares
                 .into_iter()
-                .find_map(|s| Some(Event::Read { index: s.identity.share()?, unread: s.unread.len(), cells: s.cells }))
+                .find_map(|s| {
+                    let index = s.identity.share().or(tapped)?;
+                    Some(Event::Read { index, unread: s.unread.len(), cells: s.cells })
+                })
                 .unwrap_or(Event::Nothing),
             Err(_) => Event::Nothing,
         };
@@ -115,7 +121,7 @@ fn read_phrases(jobs: mpsc::Receiver<Job>, events: mpsc::Sender<Event>) {
     for job in jobs {
         let read = match job {
             Job::Frame(frame) => scanner.scan_rgb(&frame, bitcoin_vision_words::ScanOptions::default()),
-            Job::Upload(photo) => scanner.scan(&photo, bitcoin_vision_words::ScanOptions::default()),
+            Job::Upload(photo, _) => scanner.scan(&photo, bitcoin_vision_words::ScanOptions::default()),
         };
         let event = match read {
             Ok(result) => {

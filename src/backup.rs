@@ -236,10 +236,13 @@ mod tests {
             assert_eq!(strip.identity.share(), Some(share.index()));
             strip.cells
         };
-        let (a, b) = (read(&shares[0]), read(&shares[2]));
-        let got = recover(&a, shares[0].index(), &b, shares[2].index()).unwrap();
-        assert_eq!(got.words, words);
-        assert!(got.corrections.is_empty(), "{:?}", got.corrections);
+        let cells = [read(&shares[0]), read(&shares[1]), read(&shares[2])];
+        // Any two shares, whichever came first.
+        for (a, b) in [(0, 1), (1, 0), (0, 2), (2, 0), (1, 2), (2, 1)] {
+            let got = recover(&cells[a], shares[a].index(), &cells[b], shares[b].index()).unwrap();
+            assert_eq!(got.words, words, "shares {a} then {b}");
+            assert!(got.corrections.is_empty(), "{:?}", got.corrections);
+        }
     }
 
     #[test]

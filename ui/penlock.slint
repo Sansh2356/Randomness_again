@@ -915,7 +915,10 @@ component FrameCorners {
 component ShareTile {
     in property <string> name;
     in property <bool> read;
+    in property <bool> disabled;
+    callback clicked();
     height: 64px;
+    opacity: root.disabled ? 0.4 : 1;
 
     Rectangle {
         border-radius: 12px;
@@ -948,10 +951,17 @@ component ShareTile {
             }
 
             Caption {
-                text: root.read ? "Read" : "Not read";
-                color: root.read ? Prime.success : Prime.ink-faint;
+                text: root.read ? "Read" : "Tap to upload";
+                color: root.read ? Prime.success : Prime.copper-ink;
                 font-weight: root.read ? 600 : 400;
             }
+        }
+    }
+
+    TouchArea {
+        enabled: !root.disabled;
+        clicked => {
+            root.clicked();
         }
     }
 }
@@ -1080,6 +1090,10 @@ export component ScanShares inherits Rectangle {
                 width: (root.width - 2 * Prime.gutter - 16px) / 3;
                 name: "Share \{i + 1}";
                 read: PenlockState.have[i];
+                disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
+                clicked => {
+                    Callbacks.upload-share(i);
+                }
             }
         }
 
@@ -1089,7 +1103,7 @@ export component ScanShares inherits Rectangle {
         }
 
         if !root.phrase && !root.qr && PenlockState.scan-error == "" && !(root.scanned-one && PenlockState.scan-for-wallet): Label {
-            text: root.scanned-one ? "Now take or upload a photo of a second strip." : "Take a photo of any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
+            text: root.scanned-one ? "Now add any other strip: tap a share, or take a photo." : "Tap a share to upload a strip, or take a photo. Any two work, in any order.";
         }
 
         if root.phrase && PenlockState.scan-error == "" && !PenlockState.draft-ready: VerticalLayout {
@@ -1118,7 +1132,7 @@ export component ScanShares inherits Rectangle {
             spacing: 12px;
 
             Action {
-                width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                width: root.phrase ? (root.width - 2 * Prime.gutter - 12px) / 2 : root.width - 2 * Prime.gutter;
                 height: 52px;
                 text: PenlockState.photo-reading ? "Reading…" : "Take photo";
                 disabled: PenlockState.photo-reading || !PenlockState.reader-ready;
@@ -1129,7 +1143,7 @@ export component ScanShares inherits Rectangle {
                 }
             }
 
-            Action {
+            if root.phrase: Action {
                 width: (root.width - 2 * Prime.gutter - 12px) / 2;
                 height: 52px;
                 kind: ActionKind.secondary;
