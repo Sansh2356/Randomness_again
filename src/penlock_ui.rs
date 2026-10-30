@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: MIT
 
-// Penlock screens: creating shares from a typed phrase, and restoring a phrase by scanning two strips.
+// Penlock screens: creating shares from a phrase, restoring a phrase by scanning two strips, and reading
+// a handwritten phrase.
 // Phrases, shares and readings only live in this struct and the UI while their screen is open, and are
 // dropped when it closes. Nothing is logged or saved.
 
@@ -12,11 +13,13 @@ use std::time::{Duration, Instant};
 
 use penlock::word::WORD_LEN;
 use penlock::{Distribution, ShareIndex};
-use slint_keyos_platform::slint::{self, ComponentHandle, Image, ModelRc, SharedString, VecModel};
+use slint_keyos_platform::slint::{self, ComponentHandle, Image, Model, ModelRc, SharedString, VecModel};
 
 use crate::backup::{self, PhraseCheck};
-use crate::scan::{self, Event, Reader};
-use crate::{AppContext, AppWindow, Callbacks, PenlockScreen, PenlockState, PhraseStatus, ShareRow, ShareSheet};
+use crate::scan::{self, Event, Reader, Source};
+use crate::{
+    AppContext, AppWindow, Callbacks, ChipRow, PenlockScreen, PenlockState, PhraseStatus, PhraseWord, ShareRow, ShareSheet,
+};
 
 camera::use_api!();
 
@@ -26,14 +29,22 @@ const PREVIEW_INTERVAL: Duration = Duration::from_millis(66);
 const CAMERA_WATCHDOG: Duration = Duration::from_secs(5);
 // How long "Read share N" stays up before the status goes back to searching.
 const HIT_HOLD: Duration = Duration::from_millis(1500);
+const CHIPS_PER_ROW: usize = 3;
 
 type Cells = Vec<[Distribution; WORD_LEN]>;
 
 struct Penlock {
     ui: slint::Weak<AppWindow>,
     cx: AppContext,
-    reader: OnceCell<Reader>,
-    reader_ready: Cell<bool>,
+    share_reader: OnceCell<Reader>,
+    phrase_reader: OnceCell<Reader>,
+    qr_reader: OnceCell<Reader>,
+    share_ready: Cell<bool>,
+    phrase_ready: Cell<bool>,
+    qr_ready: Cell<bool>,
+    source: Cell<Source>,
+    // The latest handwritten reading, until it's reviewed.
+    draft: RefCell<Vec<String>>,
     // Best reading per share number: (index, cells, unread boxes).
     scanned: RefCell<BTreeMap<u8, (ShareIndex, Cells, usize)>>,
     // Bumped whenever a scan screen opens or closes, so a stale frame loop knows to stop.
@@ -50,6 +61,31 @@ impl Penlock {
 
     fn with_state(&self, f: impl FnOnce(PenlockState)) { f(self.ui().global::<PenlockState>()) }
 
+    fn reader_ready(&self, source: Source) -> &Cell<bool> {
+        match source {
+            Source::Shares => &self.share_ready,
+            Source::Phrase => &self.phrase_ready,
+            Source::Qr => &self.qr_ready,
+        }
+    }
+
+    fn reader(&self, source: Source) -> &Reader {
+        let cell = match source {
+            Source::Shares => &self.share_reader,
+            Source::Phrase => &self.phrase_reader,
+            Source::Qr => &self.qr_reader,
+        };
+        cell.get_or_init(|| Reader::start(source))
+    }
+
+    fn searching(&self) -> &'static str {
+        match self.source.get() {
+            Source::Shares => "Looking for a share strip",
+            Source::Phrase => "Looking for written words",
+            Source::Qr => "Looking for a QR code",
+        }
+    }
+
     fn open(&self, screen: PenlockScreen) {
         self.wipe();
         self.with_state(|s| s.set_screen(screen));
@@ -60,8 +96,19 @@ impl Penlock {
         self.session.set(self.session.get() + 1);
         let _ = self.cx.gui.hide_camera();
         self.scanned.borrow_mut().clear();
+        self.draft.borrow_mut().clear();
         self.last_hit.set(None);
         self.with_state(|s| {
+            s.set_phrase("".into());
+            s.set_phrase_note("".into());
+            s.set_draft_ready(false);
+            s.set_can_sign_share(false);
+            s.set_scan_hit(false);
+            s.set_scan_failed(false);
+            s.set_words_read(0);
+            s.set_draft_complete(false);
+            s.set_phrase_count(0);
+            s.set_chip_rows(ModelRc::default());
             s.set_phrase_status(PhraseStatus::Neutral);
             s.set_phrase_message(PhraseCheck::Empty.message().into());
             s.set_shares(ModelRc::default());
@@ -82,9 +129,23 @@ impl Penlock {
             PhraseCheck::UnknownWord(..) | PhraseCheck::TooLong(_) | PhraseCheck::BadChecksum(_) => PhraseStatus::Error,
             PhraseCheck::Empty | PhraseCheck::Incomplete(_) => PhraseStatus::Neutral,
         };
+        let typed = backup::typed_words(text);
+        let slots = if typed.len() <= backup::LENGTHS[0] { backup::LENGTHS[0] } else { backup::LENGTHS[1].max(typed.len()) };
+        let chips: Vec<PhraseWord> = (0..slots)
+            .map(|i| {
+                let (word, bad) = typed.get(i).cloned().unwrap_or_default();
+                PhraseWord { number: i as i32 + 1, word: word.into(), bad }
+            })
+            .collect();
+        let rows: Vec<ChipRow> = chips
+            .chunks(CHIPS_PER_ROW)
+            .map(|row| ChipRow { chips: ModelRc::new(VecModel::from(row.to_vec())) })
+            .collect();
         self.with_state(|s| {
             s.set_phrase_message(check.message().into());
             s.set_phrase_status(status);
+            s.set_phrase_count(typed.len() as i32);
+            s.set_chip_rows(ModelRc::new(VecModel::from(rows)));
         });
     }
 
@@ -117,15 +178,19 @@ impl Penlock {
         }
     }
 
-    fn start_scan(self: &Rc<Self>) {
+    fn start_scan(self: &Rc<Self>, source: Source) {
         self.open(PenlockScreen::Scan);
+        self.source.set(source);
         let session = self.session.get();
-        let ready = self.reader_ready.get();
+        let ready = self.reader_ready(source).get();
+        let status = if ready { self.searching() } else { "Preparing the reader…" };
         self.with_state(|s| {
+            s.set_scan_phrase(source == Source::Phrase);
+            s.set_scan_qr(source == Source::Qr);
             s.set_reader_ready(ready);
-            s.set_scan_status(if ready { "Looking for a share strip" } else { "Preparing the share reader…" }.into());
+            s.set_scan_status(status.into());
         });
-        self.reader.get_or_init(Reader::start);
+        self.reader(source);
 
         let y = self.ui().global::<PenlockState>().get_viewfinder_y();
         if let Err(e) = self.cx.gui.show_camera(y as u16) {
@@ -139,6 +204,7 @@ impl Penlock {
                 this.with_state(|s| {
                     s.set_scan_status("No picture from the camera".into());
                     s.set_scan_error("The camera isn't sending pictures. Go back and try again.".into());
+                    s.set_scan_failed(true);
                 });
             }
         })
@@ -155,7 +221,10 @@ impl Penlock {
                 Ok(frames) => frames,
                 Err(e) => {
                     log::error!("camera subscribe: {e:?}");
-                    this.with_state(|s| s.set_scan_error("The camera is unavailable.".into()));
+                    this.with_state(|s| {
+                        s.set_scan_error("The camera is unavailable.".into());
+                        s.set_scan_failed(true);
+                    });
                     return;
                 }
             };
@@ -172,8 +241,8 @@ impl Penlock {
                         s.set_preview(Image::from_rgb8(preview));
                     });
                 }
-                let reader = this.reader.get().expect("started above");
-                if this.reader_ready.get() {
+                let reader = this.reader(source);
+                if this.reader_ready(source).get() {
                     reader.offer(rgb);
                 }
                 while let Ok(event) = reader.events.try_recv() {
@@ -190,26 +259,81 @@ impl Penlock {
     fn handle(&self, event: Event) {
         match event {
             Event::Ready => {
-                self.reader_ready.set(true);
+                self.reader_ready(self.source.get()).set(true);
                 self.with_state(|s| {
                     s.set_reader_ready(true);
-                    s.set_scan_status("Looking for a share strip".into());
+                    s.set_scan_status(self.searching().into());
                 });
             }
             Event::Failed(e) => {
-                log::error!("share reader: {e}");
+                log::error!("reader: {e}");
                 self.with_state(|s| {
-                    s.set_scan_status("Share reader unavailable".into());
-                    s.set_scan_error("The share reader couldn't start on this device.".into());
+                    s.set_scan_status("Reader unavailable".into());
+                    s.set_scan_error("The reader couldn't start on this device.".into());
+                    s.set_scan_failed(true);
                 });
             }
             Event::Nothing => {
                 if self.last_hit.get().is_none_or(|t| t.elapsed() >= HIT_HOLD) {
-                    self.with_state(|s| s.set_scan_status("Looking for a share strip".into()));
+                    self.with_state(|s| {
+                        s.set_scan_hit(false);
+                        s.set_scan_status(self.searching().into());
+                    });
                 }
             }
             Event::Read { index, cells, unread } => self.read(index, cells, unread),
+            Event::Qr(text) => {
+                self.open(PenlockScreen::Wallet);
+                self.ui().global::<Callbacks>().invoke_qr_scanned(text.into());
+            }
+            Event::Words { words, checksum } => {
+                let count = words.len();
+                *self.draft.borrow_mut() = words;
+                self.last_hit.set(Some(Instant::now()));
+                self.with_state(|s| {
+                    s.set_draft_ready(true);
+                    s.set_draft_complete(checksum && backup::LENGTHS.contains(&count));
+                    s.set_words_read(count as i32);
+                    s.set_scan_hit(true);
+                    s.set_scan_status(format!("Read {count} words").into());
+                });
+            }
         }
+    }
+
+    /// Hand what was read to the phrase screen. It's only ever a draft: one wrong word can still pass the
+    /// checksum, so nothing is done with it until the person has checked it against the paper.
+    fn review_draft(&self) {
+        let phrase = self.draft.borrow().join(" ");
+        self.open(PenlockScreen::Enter);
+        self.with_state(|s| {
+            s.set_phrase(phrase.as_str().into());
+            s.set_phrase_note("Check every word against it, even if the checksum passes.".into());
+        });
+        self.phrase_edited(&phrase);
+    }
+
+    /// Take the clearest strip read so far to the wallet, on its own.
+    fn sign_with_scanned(&self) {
+        let text = {
+            let scanned = self.scanned.borrow();
+            let best = scanned.values().min_by_key(|(_, _, unread)| *unread);
+            best.map(|(index, cells, _)| backup::share_text(&backup::share_from_cells(*index, cells)))
+        };
+        let Some(text) = text else { return };
+        self.open(PenlockScreen::Home);
+        self.ui().global::<Callbacks>().invoke_open_share(text.into());
+    }
+
+    /// Take one of the shares on screen to the wallet. The others leave this Passport with the screen.
+    fn sign_with_sheet(&self, sheet: usize) {
+        let ui = self.ui();
+        let Some(rows) = ui.global::<PenlockState>().get_shares().row_data(sheet) else { return };
+        let rows: Vec<String> =
+            rows.rows.iter().map(|row| row.symbols.iter().map(|c| c.to_string()).collect()).collect();
+        let text = format!("penlock v1 share {}\n{}", sheet + 1, rows.join("\n"));
+        self.open(PenlockScreen::Home);
+        ui.global::<Callbacks>().invoke_open_share(text.into());
     }
 
     fn read(&self, index: ShareIndex, cells: Cells, unread: usize) {
@@ -223,8 +347,12 @@ impl Penlock {
         self.with_state(|s| {
             s.set_have(ModelRc::new(VecModel::from(have)));
             s.set_scan_error("".into());
+            s.set_scan_failed(false);
+            s.set_can_sign_share(true);
+            s.set_read_share(n as i32);
+            s.set_scan_hit(true);
             s.set_scan_status(match unread {
-                0 => format!("Read share {n}"),
+                0 => format!("Read share {n} · scan the next strip"),
                 1 => format!("Read share {n} · 1 faint box"),
                 u => format!("Read share {n} · {u} faint boxes"),
             }
@@ -263,6 +391,7 @@ impl Penlock {
                 self.with_state(|s| {
                     s.set_have(ModelRc::new(VecModel::from(have)));
                     s.set_scan_error(e.into());
+                    s.set_scan_failed(true);
                 });
             }
         }
@@ -273,8 +402,14 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     let penlock = Rc::new(Penlock {
         ui: ui.as_weak(),
         cx: cx.clone(),
-        reader: OnceCell::new(),
-        reader_ready: Cell::new(false),
+        share_reader: OnceCell::new(),
+        phrase_reader: OnceCell::new(),
+        qr_reader: OnceCell::new(),
+        share_ready: Cell::new(false),
+        phrase_ready: Cell::new(false),
+        qr_ready: Cell::new(false),
+        source: Cell::new(Source::Shares),
+        draft: RefCell::default(),
         scanned: RefCell::default(),
         session: Cell::new(0),
         last_hit: Cell::new(None),
@@ -288,7 +423,34 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     });
     cb.on_penlock_scan({
         let p = penlock.clone();
-        move || p.start_scan()
+        move || p.start_scan(Source::Shares)
+    });
+    cb.on_penlock_read_phrase({
+        let p = penlock.clone();
+        move || p.start_scan(Source::Phrase)
+    });
+    cb.on_scan_qr({
+        let p = penlock.clone();
+        move |title| {
+            p.with_state(|s| s.set_scan_title(title));
+            p.start_scan(Source::Qr);
+        }
+    });
+    cb.on_scan_qr_cancel({
+        let p = penlock.clone();
+        move || p.open(PenlockScreen::Wallet)
+    });
+    cb.on_review_draft({
+        let p = penlock.clone();
+        move || p.review_draft()
+    });
+    cb.on_sign_with_scanned({
+        let p = penlock.clone();
+        move || p.sign_with_scanned()
+    });
+    cb.on_sign_with_sheet({
+        let p = penlock.clone();
+        move |sheet| p.sign_with_sheet(sheet as usize)
     });
     cb.on_penlock_close({
         let p = penlock.clone();
@@ -296,7 +458,10 @@ pub fn init(cx: &AppContext, ui: &AppWindow) {
     });
     cb.on_phrase_edited({
         let p = penlock.clone();
-        move |text| p.phrase_edited(&text)
+        move |text| {
+            p.phrase_edited(&text);
+            text.ends_with('\n')
+        }
     });
     cb.on_split_phrase({
         let p = penlock.clone();

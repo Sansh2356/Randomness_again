@@ -1,61 +1,603 @@
 // SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: MIT
 
-import { Theme, UISize, Images } from "@ui/theme.slint";
-import { IconButton, IconButtonVariant } from "@ui/icon_button.slint";
+// Prime Kit: the tokens and small parts every screen is built from.
 
-export component SectionLabel inherits Text {
-    color: Theme.palette-muted;
-    font-family: Theme.font-primary;
-    font-size: Theme.font-size-label;
-    font-weight: Theme.font-weight-semibold;
-    horizontal-alignment: center;
+import { Theme } from "@ui/theme.slint";
+import { ToastVariant } from "@ui/toast.slint";
+
+export global Prime {
+    out property <bool> dark: Theme.is-dark;
+
+    out property <color> surface: dark ? #1c1819 : #f7f3f1;
+    out property <color> surface-raised: dark ? #2b2728 : #ffffff;
+    out property <color> surface-accent: dark ? #2f2422 : #fbeee8;
+    out property <color> surface-sunken: dark ? #110f10 : #ece6e2;
+    out property <color> line: dark ? #3a3435 : #e4dcd8;
+    out property <color> line-strong: dark ? #7d7677 : #857d7b;
+    out property <color> line-accent: dark ? #8f6354 : #c98f78;
+    out property <color> ink: dark ? #f4efec : #1c1819;
+    out property <color> ink-muted: dark ? #b2aead : #5e5859;
+    out property <color> ink-faint: dark ? #9a9493 : #6b6463;
+    out property <color> copper: dark ? #d88b6d : #9c5235;
+    out property <color> copper-ink: dark ? #f2c3ac : #8a4529;
+    out property <color> copper-soft: dark ? #3a2722 : #f6dfd4;
+    out property <color> on-copper: dark ? #1c1819 : #ffffff;
+    out property <color> danger: dark ? #ff6b61 : #c62828;
+    out property <color> danger-soft: dark ? #3d1f1d : #fbe3e2;
+    out property <color> success: dark ? #4cc9d9 : #006f82;
+    out property <color> success-soft: dark ? #14313a : #ddf0f3;
+    out property <color> warning: dark ? #e8b04a : #8a5a00;
+    out property <color> scrim: dark ? #0000009e : #1c18196b;
+
+    out property <string> display-font: "Montserrat";
+    out property <string> text-font: "Inter";
+    out property <string> mono-font: "IBM Plex Mono";
+
+    out property <length> gutter: 24px;
+    out property <length> status-bar: 40px;
 }
 
-export component Helper inherits Text {
-    color: Theme.palette-muted;
-    font-family: Theme.font-primary;
-    font-size: Theme.font-size-helper;
-    horizontal-alignment: center;
+export global Icons {
+    out property <image> alert: @image-url("../resources/images/alert.svg");
+    out property <image> arrow-right: @image-url("../resources/images/arrow-right.svg");
+    out property <image> back: @image-url("../resources/images/back.svg");
+    out property <image> check: @image-url("../resources/images/check.svg");
+    out property <image> chevron-down: @image-url("../resources/images/chevron-down.svg");
+    out property <image> chevron-right: @image-url("../resources/images/chevron-right.svg");
+    out property <image> eye: @image-url("../resources/images/eye.svg");
+    out property <image> eye-off: @image-url("../resources/images/eye-off.svg");
+    out property <image> frame: @image-url("../resources/images/frame.svg");
+    out property <image> grid: @image-url("../resources/images/grid.svg");
+    out property <image> info: @image-url("../resources/images/info.svg");
+    out property <image> key: @image-url("../resources/images/key.svg");
+    out property <image> lock: @image-url("../resources/images/lock.svg");
+    out property <image> lock-wallet: @image-url("../resources/images/lock-wallet.svg");
+    out property <image> one-share: @image-url("../resources/images/one-share.svg");
+    out property <image> paste: @image-url("../resources/images/paste.svg");
+    out property <image> pen: @image-url("../resources/images/pen.svg");
+    out property <image> pin: @image-url("../resources/images/pin.svg");
+    out property <image> qr: @image-url("../resources/images/qr.svg");
+    out property <image> receive: @image-url("../resources/images/receive.svg");
+    out property <image> refresh: @image-url("../resources/images/refresh.svg");
+    out property <image> scan: @image-url("../resources/images/scan.svg");
+    out property <image> scan-text: @image-url("../resources/images/scan-text.svg");
+    out property <image> seed: @image-url("../resources/images/seed.svg");
+    out property <image> shares: @image-url("../resources/images/shares.svg");
+    out property <image> shield: @image-url("../resources/images/shield.svg");
+    out property <image> sign: @image-url("../resources/images/sign.svg");
+    out property <image> sun: @image-url("../resources/images/sun.svg");
+    out property <image> user: @image-url("../resources/images/user.svg");
+    out property <image> user-plus: @image-url("../resources/images/user-plus.svg");
+}
+
+export component Icon inherits Image {
+    in property <color> tint: Prime.ink;
+    in property <length> size: 24px;
+    width: root.size;
+    height: root.size;
+    colorize: root.tint;
+    image-fit: contain;
+}
+
+// The mono kicker above titles, always uppercase in the source text.
+export component Eyebrow inherits Text {
+    color: Prime.copper;
+    font-family: Prime.mono-font;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 2.16px;
+}
+
+export component Display inherits Text {
+    color: Prime.ink;
+    font-family: Prime.display-font;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.32px;
+}
+
+export component Title inherits Text {
+    color: Prime.ink;
+    font-family: Prime.display-font;
+    font-size: 24px;
+    font-weight: 600;
     wrap: word-wrap;
 }
 
-// Back arrow and centred title: the header of every screen pushed from a section's home.
-export component ScreenHeader {
-    in property <string> title;
-    callback back();
-    height: 48px;
+export component Heading inherits Text {
+    color: Prime.ink;
+    font-family: Prime.display-font;
+    font-size: 20px;
+    font-weight: 600;
+}
 
-    IconButton {
-        x: 0;
-        y: (parent.height - self.height) / 2;
-        icon: Images.icon("arrow-left", 24px);
-        variant: IconButtonVariant.ghost;
-        clicked => {
-            root.back();
-        }
+export component Body inherits Text {
+    color: Prime.ink-muted;
+    font-family: Prime.text-font;
+    font-size: 16px;
+    wrap: word-wrap;
+}
+
+export component Label inherits Text {
+    color: Prime.ink-muted;
+    font-family: Prime.text-font;
+    font-size: 14px;
+    wrap: word-wrap;
+}
+
+export component Caption inherits Text {
+    color: Prime.ink-faint;
+    font-family: Prime.text-font;
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+export component Code inherits Text {
+    color: Prime.ink;
+    font-family: Prime.mono-font;
+    font-size: 14px;
+}
+
+// An icon beside a line of text: the notes under fields and above actions.
+export component Note inherits HorizontalLayout {
+    in property <image> icon;
+    in property <color> tint: Prime.copper-ink;
+    in property <string> text;
+    in property <color> text-color: Prime.ink-muted;
+    spacing: 10px;
+
+    Icon {
+        source: root.icon;
+        tint: root.tint;
+        size: 20px;
     }
 
-    Text {
-        x: 56px;
-        width: parent.width - 112px;
-        height: parent.height;
-        text: root.title;
-        color: Theme.palette-foreground;
-        font-family: Theme.font-primary;
-        font-size: Theme.font-size-body;
-        font-weight: Theme.font-weight-semibold;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-        overflow: elide;
+    Label {
+        horizontal-stretch: 1;
+        text: root.text;
+        color: root.text-color;
     }
 }
 
-// Page frame shared by every screen: status-bar clearance and the standard gutters.
-export component Page inherits VerticalLayout {
-    padding-left: Theme.spacing-xl;
-    padding-right: Theme.spacing-xl;
-    padding-top: Theme.spacing-lg + UISize.control-center-status-bar-height;
-    padding-bottom: Theme.spacing-xl;
-    spacing: Theme.spacing-lg;
+export component Pill {
+    in property <string> text;
+    in property <color> tint: Prime.copper-ink;
+    in property <color> fill: Prime.copper-soft;
+    in property <color> stroke: transparent;
+    in property <bool> mono;
+    in property <image> icon;
+    in property <bool> has-icon;
+    height: 24px;
+    min-width: row.preferred-width;
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.fill;
+        border-width: 1px;
+        border-color: root.stroke;
+    }
+
+    row := HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 10px;
+        spacing: 4px;
+
+        if root.has-icon: VerticalLayout {
+            alignment: center;
+
+            Icon {
+                source: root.icon;
+                tint: root.tint;
+                size: 12px;
+            }
+        }
+
+        Text {
+            text: root.text;
+            color: root.tint;
+            font-family: root.mono ? Prime.mono-font : Prime.text-font;
+            font-size: 12px;
+            font-weight: root.mono ? 500 : 600;
+            letter-spacing: root.mono ? 1.2px : 0;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Status bar clearance. A screen is a ScreenHeader, a Content and an optional Footer.
+export component Screen inherits VerticalLayout {
+    padding-top: Prime.status-bar;
+}
+
+export component ScreenHeader {
+    in property <string> title;
+    in property <string> trailing;
+    // A check beside the trailing text, once the screen's work is done.
+    in property <bool> done;
+    in property <bool> pill;
+    // The tag warns rather than labels.
+    in property <bool> pill-caution;
+    callback back();
+    height: 64px;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: Prime.gutter;
+        spacing: 8px;
+        alignment: stretch;
+
+        Rectangle {
+            width: 48px;
+
+            Icon {
+                source: Icons.back;
+            }
+
+            TouchArea {
+                clicked => {
+                    root.back();
+                }
+            }
+        }
+
+        Title {
+            horizontal-stretch: 1;
+            text: root.title;
+            vertical-alignment: center;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+
+        if root.pill && root.trailing != "": VerticalLayout {
+            alignment: center;
+
+            Pill {
+                text: root.trailing;
+                mono: !root.pill-caution;
+                tint: root.pill-caution ? Prime.warning : Prime.copper-ink;
+                fill: root.pill-caution ? transparent : Prime.copper-soft;
+                stroke: root.pill-caution ? Prime.line-strong : Prime.line-accent;
+            }
+        }
+
+        if !root.pill && root.trailing != "": HorizontalLayout {
+            spacing: 6px;
+
+            if root.done: VerticalLayout {
+                alignment: center;
+
+                Icon {
+                    source: Icons.check;
+                    tint: Prime.success;
+                    size: 14px;
+                }
+            }
+
+            Code {
+                text: root.trailing;
+                color: root.done ? Prime.success : Prime.ink-muted;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component Content inherits VerticalLayout {
+    vertical-stretch: 1;
+    padding-top: 16px;
+    padding-left: Prime.gutter;
+    padding-right: Prime.gutter;
+}
+
+export component Footer inherits VerticalLayout {
+    padding-left: Prime.gutter;
+    padding-right: Prime.gutter;
+    padding-top: 12px;
+    padding-bottom: 32px;
+    spacing: 12px;
+}
+
+export enum ActionKind { primary, secondary, tertiary }
+
+export component Action {
+    in property <string> text;
+    in property <ActionKind> kind: ActionKind.primary;
+    in property <bool> disabled;
+    in property <bool> has-icon;
+    in property <bool> icon-after;
+    in property <image> icon;
+    callback clicked();
+
+    property <color> label: root.kind == ActionKind.primary ? Prime.on-copper : root.kind == ActionKind.secondary ? Prime.ink : Prime.copper-ink;
+
+    height: root.kind == ActionKind.primary ? 64px : root.kind == ActionKind.secondary ? 52px : 48px;
+    opacity: root.disabled ? 0.4 : 1;
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.kind == ActionKind.primary ? Prime.copper : root.kind == ActionKind.secondary ? Prime.surface-raised : transparent;
+        border-width: root.kind == ActionKind.secondary ? 1px : 0;
+        border-color: Prime.line-strong;
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 8px;
+
+            if root.has-icon && !root.icon-after: VerticalLayout {
+                alignment: center;
+
+                Icon {
+                    source: root.icon;
+                    tint: root.label;
+                    size: 20px;
+                }
+            }
+
+            Text {
+                text: root.text;
+                color: root.label;
+                font-family: Prime.text-font;
+                font-size: 16px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+
+            if root.has-icon && root.icon-after: VerticalLayout {
+                alignment: center;
+
+                Icon {
+                    source: root.icon;
+                    tint: root.label;
+                    size: 20px;
+                }
+            }
+        }
+    }
+
+    TouchArea {
+        enabled: !root.disabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// The icon tile on cards.
+export component IconTile {
+    in property <image> icon;
+    in property <length> size: 48px;
+    in property <color> tint: Prime.copper-ink;
+    in property <color> fill: Prime.copper-soft;
+    width: root.size;
+    height: root.size;
+
+    Rectangle {
+        border-radius: 8px;
+        background: root.fill;
+
+        Icon {
+            source: root.icon;
+            tint: root.tint;
+        }
+    }
+}
+
+// A card that goes somewhere. One per screen may be the accent card.
+export component NavCard {
+    in property <image> icon;
+    in property <string> number;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> accent;
+    in property <bool> open;
+    in property <bool> test-only;
+    callback clicked();
+
+    min-height: row.preferred-height;
+
+    if root.accent: Rectangle {
+        x: -6px;
+        y: -6px;
+        width: parent.width + 12px;
+        height: parent.height + 12px;
+        border-radius: 18px;
+        background: Prime.copper.with-alpha(0.10);
+    }
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.accent ? Prime.surface-accent : root.test-only ? transparent : Prime.surface-raised;
+        border-width: 1px;
+        border-color: root.accent ? Prime.line-accent : root.test-only ? Prime.line-strong : Prime.line;
+    }
+
+    row := HorizontalLayout {
+        padding: 16px;
+        spacing: 16px;
+
+        VerticalLayout {
+            alignment: center;
+
+            IconTile {
+                icon: root.icon;
+                tint: root.test-only ? Prime.ink-muted : Prime.copper-ink;
+                fill: root.test-only ? Prime.surface-raised : Prime.copper-soft;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            spacing: 2px;
+
+            if root.number != "": HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                Eyebrow {
+                    text: root.number;
+                    vertical-alignment: center;
+                }
+
+                if root.open: Pill {
+                    height: 20px;
+                    text: "Open";
+                    tint: Prime.success;
+                    fill: Prime.success-soft;
+                    has-icon: true;
+                    icon: Icons.check;
+                }
+            }
+
+            Heading {
+                text: root.title;
+            }
+
+            if root.test-only: HorizontalLayout {
+                alignment: start;
+
+                Pill {
+                    text: "Simulator only";
+                    tint: Prime.warning;
+                    fill: transparent;
+                    stroke: Prime.line-strong;
+                }
+            }
+
+            if !root.test-only: Label {
+                text: root.subtitle;
+                wrap: no-wrap;
+                overflow: elide;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+
+            Icon {
+                source: Icons.chevron-right;
+                tint: root.accent ? Prime.copper-ink : Prime.ink-muted;
+            }
+        }
+    }
+
+    TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+// A label and a value, recessed: fingerprints and the like.
+export component ValueWell {
+    in property <string> label;
+    in property <string> value;
+    height: 44px;
+
+    Rectangle {
+        border-radius: 8px;
+        background: Prime.surface-sunken;
+    }
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+
+        Caption {
+            horizontal-stretch: 1;
+            text: root.label;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+
+        Code {
+            text: root.value;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 0.72px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// Messages rise over the screen, above the bottom action, and clear themselves.
+export component Notice {
+    in property <string> message;
+    in property <string> detail;
+    in property <ToastVariant> variant;
+    callback dismissed();
+
+    property <bool> failed: root.variant == ToastVariant.error;
+    property <color> tint: root.failed ? Prime.danger : root.variant == ToastVariant.warning ? Prime.warning : Prime.success;
+
+    min-height: max(56px, row.preferred-height);
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.failed ? Prime.danger-soft : root.variant == ToastVariant.warning ? Prime.surface-raised : Prime.success-soft;
+        border-width: 1px;
+        border-color: root.tint;
+    }
+
+    row := HorizontalLayout {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        padding-left: 16px;
+        padding-right: 4px;
+        spacing: 12px;
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 28px;
+                height: 28px;
+                border-radius: 8px;
+                background: root.tint;
+
+                Icon {
+                    source: root.failed ? Icons.alert : Icons.check;
+                    tint: Prime.on-copper;
+                    size: 16px;
+                }
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+
+            Text {
+                text: (root.failed ? "Error: " : "") + root.message;
+                color: Prime.ink;
+                font-family: Prime.text-font;
+                font-size: 16px;
+                font-weight: 600;
+                wrap: word-wrap;
+            }
+
+            if root.detail != "": Caption {
+                text: root.detail;
+                color: Prime.ink-muted;
+            }
+        }
+
+        Rectangle {
+            width: 48px;
+
+            Text {
+                text: "×";
+                color: Prime.ink-muted;
+                font-family: Prime.text-font;
+                font-size: 20px;
+            }
+
+            TouchArea {
+                clicked => {
+                    root.dismissed();
+                }
+            }
+        }
+    }
 }

@@ -1,5 +1,10 @@
 {
   "mcpServers": {
+    "passport-sim": {
+      "type": "stdio",
+      "command": "foundation-passport-drive",
+      "args": ["--sim", "mcp"]
+    },
     "passport-drive": {
       "type": "stdio",
       "command": "foundation-passport-drive",

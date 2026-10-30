@@ -43,15 +43,15 @@ impl PhraseCheck {
     /// One line for under the input. Errors are worded as what to do next.
     pub fn message(&self) -> String {
         match self {
-            Self::Empty => "Enter 12 or 24 words, separated by spaces".into(),
+            Self::Empty => "Enter 12 or 24 words, separated by spaces.".into(),
             Self::Incomplete(n) => {
                 let target = if *n <= 12 { 12 } else { 24 };
                 format!("{n} of {target} words")
             }
-            Self::UnknownWord(i, w) => format!("Word {i}, \u{201c}{w}\u{201d}, isn't a BIP39 word"),
+            Self::UnknownWord(i, w) => format!("Word {i}, \u{201c}{w}\u{201d}, isn't a BIP39 word. Check it for a typo."),
             Self::TooLong(n) => format!("{n} words is too many: Penlock takes 12 or 24"),
             Self::BadChecksum(n) => format!("These {n} words fail the BIP39 checksum. Check each one for a typo"),
-            Self::Valid(w) => format!("Valid {}-word phrase", w.len()),
+            Self::Valid(w) => format!("Valid {}-word phrase · checksum OK", w.len()),
         }
     }
 }
@@ -83,6 +83,22 @@ pub fn check_phrase(text: &str) -> PhraseCheck {
     }
 }
 
+/// The phrase as typed so far, word by word, each marked if it can't be a BIP39 word. The word still
+/// being typed isn't marked while one could start with it, the same as `check_phrase`.
+pub fn typed_words(text: &str) -> Vec<(String, bool)> {
+    let lower = text.to_lowercase();
+    let tokens: Vec<&str> = lower.split_whitespace().collect();
+    let still_typing = !text.ends_with(char::is_whitespace);
+    tokens
+        .iter()
+        .enumerate()
+        .map(|(i, token)| {
+            let typing = still_typing && i + 1 == tokens.len() && Word::all().any(|w| w.as_str().starts_with(token));
+            (token.to_string(), Word::from_bip39(token).is_none() && !typing)
+        })
+        .collect()
+}
+
 /// Split into three shares, then check the split recovers the phrase from every pair before anyone
 /// copies it onto paper.
 pub fn split(words: &[Word]) -> Result<Vec<Share>, String> {
@@ -94,6 +110,17 @@ pub fn split(words: &[Word]) -> Result<Vec<Share>, String> {
 /// A share as worksheet rows of six symbols, the two checksum symbols first.
 pub fn rows(share: &Share) -> Vec<[char; WORD_LEN]> {
     share.words().iter().map(|w| w.map(|sym| sym.to_char())).collect()
+}
+
+/// A share as `Share::parse` reads it, for handing between screens.
+pub fn share_text(share: &Share) -> String {
+    let rows: Vec<String> = rows(share).iter().map(|row| row.iter().collect()).collect();
+    format!("penlock v1 share {}\n{}", share.index().number(), rows.join("\n"))
+}
+
+/// The most likely reading of one strip. With no second share there's nothing to check it against.
+pub fn share_from_cells(index: ShareIndex, cells: &[[Distribution; WORD_LEN]]) -> Share {
+    Share::new(index, cells.iter().map(|row| row.map(|cell| cell.argmax())).collect())
 }
 
 pub struct Recovered {
@@ -149,6 +176,15 @@ mod tests {
         let bad = PHRASE.replace("about", "abandon");
         assert_eq!(check_phrase(&bad), PhraseCheck::BadChecksum(12));
         assert!(matches!(check_phrase(&PHRASE.to_uppercase()), PhraseCheck::Valid(w) if w.len() == 12));
+    }
+
+    #[test]
+    fn typed_words_mark_only_what_cannot_be_a_word() {
+        let flags = |text| typed_words(text).into_iter().map(|(_, bad)| bad).collect::<Vec<_>>();
+        assert_eq!(flags("abandon aban"), [false, false], "mid-word is not an error");
+        assert_eq!(flags("abandon aban "), [false, true], "a finished word has to be whole");
+        assert_eq!(flags("zzz abandon"), [true, false]);
+        assert!(typed_words("").is_empty());
     }
 
     #[test]

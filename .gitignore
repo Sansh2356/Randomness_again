@@ -2,3 +2,5 @@ target/
 .foundation-sdk/
 ui/ui
 manifest.toml
+tools/musig-cosigner/target/
+.DS_Store

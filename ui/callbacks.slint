@@ -4,24 +4,13 @@
 import { ToastVariant } from "@ui/toast.slint";
 import { UISize } from "@ui/theme.slint";
 
-export struct NoteItem {
-    amount: string,
-    mint: string,
-}
-
 export global AppState {
-    // 0 = Wallet, 1 = Penlock.
-    in-out property <int> section: 0;
-    in property <string> balance: "0 sat";
-    in property <[NoteItem]> notes;
-    // Note being sent, or -1.
-    in property <int> selected: -1;
-    in property <image> qr;
     in property <string> toast;
+    in property <string> toast-detail;
     in property <ToastVariant> toast-variant;
 }
 
-export enum PenlockScreen { home, enter, shares, scan, result }
+export enum PenlockScreen { home, enter, shares, scan, result, wallet-load, wallet, wallet-qr, wallet-input, wallet-review }
 
 // One worksheet row: six symbols, the two shaded checksum boxes first.
 export struct ShareRow {
@@ -34,39 +23,132 @@ export struct ShareSheet {
 
 export enum PhraseStatus { neutral, error, valid }
 
+// A numbered word under the phrase field. An empty word is a slot still to fill.
+export struct PhraseWord {
+    number: int,
+    word: string,
+    bad: bool,
+}
+
+export struct ChipRow {
+    chips: [PhraseWord],
+}
+
 export global PenlockState {
     in-out property <PenlockScreen> screen: PenlockScreen.home;
+    in-out property <bool> warning-accepted: false;
 
-    in property <string> phrase-message: "Enter 12 or 24 words, separated by spaces";
+    in-out property <string> phrase;
+    // Above the field when the phrase came from the camera.
+    in property <string> phrase-note;
+    in property <string> phrase-message: "Enter 12 or 24 words, separated by spaces.";
     in property <PhraseStatus> phrase-status: PhraseStatus.neutral;
+    in property <int> phrase-count;
+    in property <[ChipRow]> chip-rows;
 
     in property <[ShareSheet]> shares;
 
     // Where the camera picture sits on screen; Rust passes it to ShowCamera.
-    out property <length> viewfinder-y: UISize.control-center-status-bar-height + 72px;
+    out property <length> viewfinder-y: UISize.control-center-status-bar-height + 64px;
     in property <image> preview;
     in property <bool> camera-live;
     in property <bool> reader-ready;
     in property <string> scan-status: "Starting camera…";
     in property <string> scan-error;
+    in property <bool> scan-failed;
+    // Something was just read: the frame and status turn to success.
+    in property <bool> scan-hit;
+    in property <int> read-share;
+    in property <int> words-read;
+    in property <bool> draft-complete;
     in property <[bool]> have: [false, false, false];
+    // The scan screen is reading a written phrase rather than share strips.
+    in property <bool> scan-phrase;
+    // The scan screen is reading a QR code for the wallet, under this title.
+    in property <bool> scan-qr;
+    in property <string> scan-title;
+    in property <bool> draft-ready;
+    // A strip has been read and could sign on its own.
+    in property <bool> can-sign-share;
 
     in property <[string]> words;
     in property <[string]> corrections;
     in property <string> result-subtitle;
 }
 
+// An address in groups of four, in lines that fit the screen.
+export struct AddressChunk {
+    text: string,
+    hot: bool,
+}
+
+export struct AddressRow {
+    chunks: [AddressChunk],
+}
+
+export struct SendRow {
+    rows: [AddressRow],
+    amount: string,
+}
+
+export enum QrKind { key, address, nonces, partial, final-tx }
+
+export global WalletState {
+    in property <bool> loaded;
+    in property <string> fingerprint;
+    // What the key came from: "Seed phrase" or "Share 1".
+    in property <string> source;
+    in property <int> cosigners;
+
+    in property <QrKind> qr-kind;
+    in property <string> qr-title;
+    in property <string> qr-caption;
+    in property <[AddressRow]> address-rows;
+    in property <image> qr;
+
+    in property <bool> simulator;
+    in property <string> input-title;
+    in-out property <string> input;
+
+    in property <[SendRow]> sends;
+    in property <string> send-total;
+    in property <bool> send-total-long;
+    in property <string> change;
+    in property <string> fee;
+}
+
 export global Callbacks {
-    callback scan-receive();
-    callback select-note(int);
-    callback close-note();
-    callback mark-sent();
     callback dismiss-toast();
 
     callback penlock-create();
     callback penlock-scan();
+    callback penlock-read-phrase();
+    callback review-draft();
     // Leave the current Penlock screen, wiping whatever phrase or shares it held.
     callback penlock-close();
-    callback phrase-edited(string);
+    // Returns true when the edit was the keyboard's Done key, which arrives as a newline.
+    callback phrase-edited(string) -> bool;
     callback split-phrase(string);
+
+    callback scan-qr(string);
+    callback scan-qr-cancel();
+    callback qr-scanned(string);
+    callback sign-with-scanned();
+    callback sign-with-sheet(int);
+    callback open-wallet(string);
+    callback open-share(string);
+    callback wallet-paste-share();
+    callback wallet-from-recovered();
+    callback wallet-home();
+    callback wallet-lock();
+    callback wallet-show-key();
+    callback wallet-add-cosigner();
+    callback wallet-receive();
+    callback wallet-next-address();
+    callback wallet-sign();
+    callback wallet-scan();
+    callback wallet-submit(string);
+    callback wallet-approve();
+    callback wallet-cancel();
+    callback wallet-back();
 }

@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
+# SPDX-License-Identifier: MIT
+
+# A laptop cosigner for trying the MuSig wallet: it plays the other participant and builds PSBTs.
+[package]
+name = "musig-cosigner"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+bip39 = "2.2"
+bitcoin = { version = "0.32", features = ["base64"] }
+getrandom = "0.2"
+musig2 = { version = "0.4", default-features = false, features = ["k256"] }
+penlock = { git = "https://github.com/penlock-io/bitcoin-vision", rev = "29dcf378623ac9a047d6e30790f20789903ae669" }
+rand_core = "0.9"

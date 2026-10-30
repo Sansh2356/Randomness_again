@@ -7,31 +7,42 @@ import {
     Images,
     ControlSize,
 } from "@ui/theme.slint";
-import { SegmentedControl } from "@ui/segmented_control.slint";
-import { Toast, ToastVariant } from "@ui/toast.slint";
+import { ToastVariant } from "@ui/toast.slint";
 import {
+    AddressChunk,
+    AddressRow,
     Callbacks,
     AppState,
-    NoteItem,
+    ChipRow,
     PenlockState,
     PenlockScreen,
     PhraseStatus,
+    PhraseWord,
+    QrKind,
+    SendRow,
     ShareRow,
     ShareSheet,
+    WalletState,
 } from "callbacks.slint";
-import { Page } from "common.slint";
-import { WalletHome, SendSheet } from "wallet.slint";
-import { PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
+import { Notice, Prime } from "common.slint";
+import { SeedWarning, PenlockHome, EnterPhrase, ShareSheets, ScanShares, Recovered } from "penlock.slint";
+import { WalletLoad, WalletHome, WalletQr, WalletInput, WalletReview } from "wallet.slint";
 
 export {
+    AddressChunk,
+    AddressRow,
     Callbacks,
     AppState,
-    NoteItem,
+    ChipRow,
     PenlockState,
     PenlockScreen,
     PhraseStatus,
+    PhraseWord,
+    QrKind,
+    SendRow,
     ShareRow,
     ShareSheet,
+    WalletState,
     Theme,
     Images,
     ControlSize,
@@ -39,46 +50,24 @@ export {
 }
 
 export component AppWindow inherits Window {
-    title: "Cashu and Penlock";
+    title: "Penlock";
     preferred-width: UISize.screen-width;
     preferred-height: UISize.screen-height;
-    background: Theme.palette-background;
+    background: Prime.surface;
 
-    // Section homes, under the Wallet / Penlock switcher.
     Rectangle {
         width: parent.width;
         height: parent.height;
-        background: Theme.palette-background;
+        background: Prime.surface;
 
-        Page {
-            SegmentedControl {
-                options: ["Wallet", "Penlock"];
-                selected-index: AppState.section;
-                changed(index, _) => {
-                    AppState.section = index;
-                }
-            }
-
-            if AppState.section == 0: WalletHome {
-                vertical-stretch: 1;
-            }
-
-            if AppState.section == 1: PenlockHome {
-                vertical-stretch: 1;
-            }
-        }
+        PenlockHome { }
     }
 
-    // Flows pushed over the homes. Each is opaque and takes the whole screen.
-    if AppState.selected >= 0: SendSheet {
-        width: parent.width;
-        height: parent.height;
-    }
-
+    // Flows pushed over the home. Each is opaque and takes the whole screen.
     if PenlockState.screen != PenlockScreen.home: Rectangle {
         width: parent.width;
         height: parent.height;
-        background: Theme.palette-background;
+        background: Prime.surface;
 
         // Swallow touches meant for the home underneath.
         TouchArea { }
@@ -90,12 +79,33 @@ export component AppWindow inherits Window {
             height: parent.height;
         }
         if PenlockState.screen == PenlockScreen.result: Recovered { }
+        if PenlockState.screen == PenlockScreen.wallet-load: WalletLoad { }
+        if PenlockState.screen == PenlockScreen.wallet: WalletHome { }
+        if PenlockState.screen == PenlockScreen.wallet-qr: WalletQr { }
+        if PenlockState.screen == PenlockScreen.wallet-input: WalletInput { }
+        if PenlockState.screen == PenlockScreen.wallet-review: WalletReview { }
     }
 
-    if AppState.toast != "": Toast {
+    if !PenlockState.warning-accepted: SeedWarning {
         width: parent.width;
         height: parent.height;
+    }
+
+    // Above the bottom action, and gone on their own.
+    Timer {
+        interval: 4s;
+        running: AppState.toast != "";
+        triggered => {
+            Callbacks.dismiss-toast();
+        }
+    }
+
+    if AppState.toast != "": Notice {
+        x: Prime.gutter;
+        y: parent.height - 100px - self.min-height;
+        width: parent.width - 2 * Prime.gutter;
         message: AppState.toast;
+        detail: AppState.toast-detail;
         variant: AppState.toast-variant;
         dismissed => {
             Callbacks.dismiss-toast();

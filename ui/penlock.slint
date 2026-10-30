@@ -1,107 +1,426 @@
 // SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: MIT
 
-import { Theme, UISize, ControlSize, ButtonVariant, Images } from "@ui/theme.slint";
-import { Button } from "@ui/button.slint";
-import { Card } from "@ui/card.slint";
-import { Chip, ChipColor } from "@ui/chip.slint";
-import { SegmentedControl } from "@ui/segmented_control.slint";
-import { Spinner } from "@ui/spinner.slint";
+import { Dialog } from "@ui/dialog.slint";
+import { SlideToConfirm } from "@ui/slide_to_confirm.slint";
 import { TextArea } from "@ui/textarea.slint";
-import { Callbacks, PenlockState, PhraseStatus, ShareRow } from "callbacks.slint";
-import { SectionLabel, Helper, ScreenHeader, Page } from "common.slint";
+import { Callbacks, PenlockScreen, PenlockState, PhraseStatus, ShareRow, WalletState } from "callbacks.slint";
+import {
+    Action,
+    ActionKind,
+    Body,
+    Caption,
+    Code,
+    Content,
+    Display,
+    Eyebrow,
+    Footer,
+    Heading,
+    Icon,
+    Icons,
+    Label,
+    NavCard,
+    Note,
+    Prime,
+    Screen,
+    ScreenHeader,
+    Title,
+} from "common.slint";
 
-// The Penlock section's body, below the section switcher.
-export component PenlockHome inherits VerticalLayout {
-    spacing: Theme.spacing-lg;
+// Shown over the home on every launch; nothing is saved, so there's no "seen it" to remember.
+export component SeedWarning inherits Rectangle {
+    // Dialog only blocks touches on its backdrop when it's dismissable.
+    TouchArea { }
 
-    Card {
-        width: 100%;
-        eyebrow: "2-OF-3 PAPER BACKUP";
-        title: "Penlock";
-        body: "Split a seed phrase into three paper shares. Any two bring it back; one alone reveals nothing.";
-        footer: "Runs entirely on this Passport, offline. Nothing is saved.";
-    }
+    Dialog {
+        width: parent.width;
+        height: parent.height;
+        dismissable: false;
+        fill-container: true;
+        backdrop-color: Prime.scrim;
+        panel-background: Prime.surface-raised;
+        panel-border-color: Prime.line;
+        panel-padding: 24px;
+        border-radius: 24px;
 
-    Card {
-        width: 100%;
-        size: ControlSize.sm;
-        interactive: true;
-        icon: Images.icon("key", 24px);
-        title: "Create shares";
-        subtitle: "Split a 12 or 24-word phrase";
-        clicked => {
-            Callbacks.penlock-create();
+        HorizontalLayout {
+            alignment: start;
+
+            Rectangle {
+                width: 48px;
+                height: 48px;
+                border-radius: 24px;
+                background: Prime.copper-soft;
+
+                Icon {
+                    source: Icons.shield;
+                    tint: Prime.copper-ink;
+                }
+            }
         }
-    }
 
-    Card {
-        width: 100%;
-        size: ControlSize.sm;
-        interactive: true;
-        icon: Images.icon("camera", 24px);
-        title: "Restore from shares";
-        subtitle: "Scan any two strips with the camera";
-        clicked => {
-            Callbacks.penlock-scan();
+        Eyebrow {
+            text: "BEFORE YOU START";
         }
-    }
 
-    Rectangle {
-        vertical-stretch: 1;
+        Title {
+            text: "Protect your seed phrase";
+        }
+
+        Body {
+            text: "Anyone with your seed phrase can take your funds. Never photograph it, share it, or type it into anything but this Passport.";
+        }
+
+        Rectangle {
+            border-radius: 8px;
+            background: Prime.surface-sunken;
+            height: bullets.preferred-height;
+
+            bullets := VerticalLayout {
+                padding: 16px;
+                spacing: 12px;
+
+                Note {
+                    icon: Icons.shares;
+                    text: "Any two of your three shares rebuild the phrase.";
+                    text-color: Prime.ink;
+                }
+
+                Note {
+                    icon: Icons.pin;
+                    text: "Keep each strip in a different place.";
+                    text-color: Prime.ink;
+                }
+            }
+        }
+
+        Action {
+            height: 52px;
+            text: "I understand";
+            clicked => {
+                PenlockState.warning-accepted = true;
+            }
+        }
     }
 }
 
-export component EnterPhrase inherits Page {
+export component PenlockHome inherits Screen {
+    VerticalLayout {
+        vertical-stretch: 1;
+        padding-top: 32px;
+        padding-left: Prime.gutter;
+        padding-right: Prime.gutter;
+        padding-bottom: 24px;
+
+        Eyebrow {
+            text: "2-OF-3 PAPER BACKUP";
+        }
+
+        Rectangle {
+            height: 8px;
+        }
+
+        Display {
+            text: "Penlock";
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Body {
+            text: "Split your seed phrase into three paper shares. Any two rebuild it. Runs offline on this Passport, and nothing is saved.";
+        }
+
+        Rectangle {
+            height: 24px;
+        }
+
+        VerticalLayout {
+            spacing: 12px;
+
+            NavCard {
+                icon: Icons.shares;
+                number: "01";
+                title: "Create shares";
+                subtitle: "Split a 12- or 24-word phrase";
+                accent: !WalletState.loaded;
+                clicked => {
+                    Callbacks.penlock-create();
+                }
+            }
+
+            NavCard {
+                icon: Icons.refresh;
+                number: "02";
+                title: "Restore from shares";
+                subtitle: "Scan any two strips with the camera";
+                clicked => {
+                    Callbacks.penlock-scan();
+                }
+            }
+
+            NavCard {
+                icon: Icons.scan-text;
+                number: "03";
+                title: "Read a written phrase";
+                subtitle: "Scan your seed phrase off paper";
+                clicked => {
+                    Callbacks.penlock-read-phrase();
+                }
+            }
+        }
+
+        Rectangle {
+            height: 24px;
+        }
+
+        Eyebrow {
+            text: "SIGNING";
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        NavCard {
+            icon: Icons.key;
+            number: "04";
+            title: "MuSig wallet";
+            subtitle: WalletState.loaded ? "Key \{WalletState.fingerprint} · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}" : "Sign transactions with cosigners";
+            accent: WalletState.loaded;
+            open: WalletState.loaded;
+            clicked => {
+                if WalletState.loaded {
+                    Callbacks.wallet-home();
+                } else {
+                    PenlockState.screen = PenlockScreen.wallet-load;
+                }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+    }
+}
+
+component WordChip {
+    in property <int> number;
+    in property <string> word;
+    in property <bool> bad;
+    height: 32px;
+
+    Rectangle {
+        border-radius: 8px;
+        background: root.bad ? Prime.danger-soft : root.word != "" ? Prime.surface-raised : transparent;
+        border-width: 1px;
+        border-color: root.bad ? Prime.danger : Prime.line;
+    }
+
+    HorizontalLayout {
+        padding-left: 10px;
+        padding-right: 8px;
+        spacing: 6px;
+
+        Text {
+            width: 18px;
+            text: root.number;
+            color: root.bad ? Prime.danger : Prime.ink-faint;
+            font-family: Prime.mono-font;
+            font-size: 12px;
+            vertical-alignment: center;
+        }
+
+        Text {
+            horizontal-stretch: 1;
+            text: root.word;
+            color: root.bad ? Prime.danger : Prime.ink;
+            font-family: Prime.text-font;
+            font-size: 14px;
+            font-weight: 500;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+export component EnterPhrase inherits Screen {
     ScreenHeader {
         title: "Create shares";
         back => {
-            phrase.value = "";
             Callbacks.penlock-close();
         }
     }
 
-    Card {
-        width: 100%;
-        size: ControlSize.sm;
-        icon: Images.icon("lock", 24px);
-        body: "Your phrase stays on this screen. It isn't saved, and it's wiped when you leave.";
-    }
+    Content {
+        spacing: 8px;
 
-    phrase := TextArea {
-        width: 100%;
-        label: "Seed phrase";
-        placeholder: "Type your words, separated by spaces";
-        min-rows: 4;
-        max-rows: 7;
-        error: PenlockState.phrase-status == PhraseStatus.error ? PenlockState.phrase-message : "";
-        changed(text) => {
-            Callbacks.phrase-edited(text);
+        Note {
+            icon: Icons.lock;
+            tint: Prime.copper;
+            text: "Your phrase stays on this screen. It isn't saved, and it's wiped when you leave.";
+        }
+
+        if PenlockState.phrase-note != "": Rectangle {
+            border-radius: 12px;
+            background: Prime.surface-raised;
+            border-width: 1px;
+            border-color: Prime.line;
+            height: read-note.preferred-height;
+
+            read-note := VerticalLayout {
+                padding-top: 12px;
+                padding-bottom: 12px;
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 2px;
+
+                Label {
+                    text: "Read from paper.";
+                    color: Prime.warning;
+                    font-weight: 600;
+                }
+
+                Label {
+                    text: PenlockState.phrase-note;
+                    color: Prime.ink;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 8px;
+        }
+
+        HorizontalLayout {
+            Label {
+                horizontal-stretch: 1;
+                text: "Seed phrase";
+                font-weight: 500;
+            }
+
+            Code {
+                text: PenlockState.phrase-count == 1 ? "1 word" : "\{PenlockState.phrase-count} words";
+                color: Prime.ink-faint;
+                font-size: 12px;
+            }
+        }
+
+        phrase := TextArea {
+            vertical-stretch: 0;
+            height: 112px;
+            field-min-height: 112px;
+            disable-autosize: true;
+            placeholder: "Type your words, separated by spaces";
+            value <=> PenlockState.phrase;
+            background: Prime.surface-sunken;
+            foreground: Prime.ink;
+            placeholder-color: Prime.ink-faint;
+            border-color: PenlockState.phrase-status == PhraseStatus.error ? Prime.danger : Prime.line-strong;
+            border-width: PenlockState.phrase-status == PhraseStatus.error ? 2px : 1px;
+            border-radius: 8px;
+            font-family: Prime.text-font;
+            font-size: 18px;
+            changed(text) => {
+                // The open keyboard covers the button, so Done has to close it.
+                if Callbacks.phrase-edited(text) {
+                    self.clear-focus();
+                }
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 6px;
+
+            if PenlockState.phrase-status == PhraseStatus.error: Icon {
+                source: Icons.alert;
+                tint: Prime.danger;
+                size: 16px;
+            }
+
+            if PenlockState.phrase-status == PhraseStatus.valid: Icon {
+                source: Icons.check;
+                tint: Prime.success;
+                size: 16px;
+            }
+
+            Label {
+                horizontal-stretch: 1;
+                text: PenlockState.phrase-message;
+                color: PenlockState.phrase-status == PhraseStatus.error ? Prime.danger : PenlockState.phrase-status == PhraseStatus.valid ? Prime.success : Prime.ink-faint;
+            }
+        }
+
+        if PenlockState.phrase-count == 0: Rectangle {
+            vertical-stretch: 1;
+            min-height: 96px;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: Prime.line-strong;
+
+            VerticalLayout {
+                alignment: center;
+                padding-left: 32px;
+                padding-right: 32px;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    alignment: center;
+
+                    Icon {
+                        source: Icons.grid;
+                        tint: Prime.ink-faint;
+                    }
+                }
+
+                Label {
+                    text: "Your words appear here, numbered, so you can check each one against your paper.";
+                    color: Prime.ink-faint;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        if PenlockState.phrase-count > 0: Flickable {
+            vertical-stretch: 1;
+            viewport-height: chips.preferred-height;
+
+            chips := VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+
+                for row in PenlockState.chip-rows: HorizontalLayout {
+                    spacing: 8px;
+
+                    for chip in row.chips: WordChip {
+                        width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                        number: chip.number;
+                        word: chip.word;
+                        bad: chip.bad;
+                    }
+                }
+            }
         }
     }
 
-    if PenlockState.phrase-status != PhraseStatus.error: Text {
-        text: PenlockState.phrase-message;
-        color: PenlockState.phrase-status == PhraseStatus.valid ? Theme.color-success : Theme.palette-muted;
-        font-family: Theme.font-primary;
-        font-size: Theme.font-size-helper;
-        font-weight: PenlockState.phrase-status == PhraseStatus.valid ? Theme.font-weight-semibold : Theme.font-weight-normal;
-        wrap: word-wrap;
-    }
+    Footer {
+        Action {
+            text: "Create shares";
+            disabled: PenlockState.phrase-status != PhraseStatus.valid;
+            clicked => {
+                Callbacks.split-phrase(phrase.value);
+                phrase.value = "";
+            }
+        }
 
-    Rectangle {
-        vertical-stretch: 1;
-    }
-
-    Button {
-        width: 100%;
-        text: "Create shares";
-        size: ControlSize.lg;
-        full-width: true;
-        disabled: PenlockState.phrase-status != PhraseStatus.valid;
-        clicked => {
-            Callbacks.split-phrase(phrase.value);
-            phrase.value = "";
+        Action {
+            kind: ActionKind.secondary;
+            text: "Open wallet";
+            disabled: PenlockState.phrase-status != PhraseStatus.valid;
+            clicked => {
+                Callbacks.open-wallet(phrase.value);
+            }
         }
     }
 }
@@ -110,19 +429,19 @@ component SymbolBox inherits Rectangle {
     in property <string> symbol;
     // The worksheet shades the two checksum boxes.
     in property <bool> shaded;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
     border-width: 1px;
-    border-color: Theme.palette-border;
-    background: root.shaded ? Theme.palette-secondary.with-alpha(Theme.is-dark ? 0.25 : 0.55) : Theme.palette-surface;
+    border-color: root.shaded ? Prime.line-accent : Prime.line-strong;
+    background: root.shaded ? Prime.copper-soft : Prime.surface-sunken;
 
     Text {
         text: root.symbol;
-        color: Theme.palette-foreground;
-        font-family: Theme.font-primary;
-        font-size: Theme.font-size-md;
-        font-weight: Theme.font-weight-bold;
+        color: root.shaded ? Prime.copper-ink : Prime.ink;
+        font-family: Prime.mono-font;
+        font-size: 18px;
+        font-weight: 500;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -131,25 +450,26 @@ component SymbolBox inherits Rectangle {
 component ShareGrid inherits VerticalLayout {
     in property <[ShareRow]> rows;
     alignment: start;
-    spacing: Theme.spacing-sm;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    spacing: 6px;
 
     for row[i] in root.rows: HorizontalLayout {
         alignment: center;
         spacing: 6px;
 
         Text {
-            width: 32px;
+            width: 24px;
             text: i + 1;
-            color: Theme.palette-muted;
-            font-family: Theme.font-primary;
-            font-size: Theme.font-size-label;
-            font-weight: Theme.font-weight-semibold;
+            color: Prime.ink-faint;
+            font-family: Prime.mono-font;
+            font-size: 12px;
             horizontal-alignment: right;
             vertical-alignment: center;
         }
 
         Rectangle {
-            width: 4px;
+            width: 6px;
         }
 
         for c in 2: SymbolBox {
@@ -158,7 +478,7 @@ component ShareGrid inherits VerticalLayout {
         }
 
         Rectangle {
-            width: 10px;
+            width: 14px;
         }
 
         for c in 4: SymbolBox {
@@ -167,75 +487,339 @@ component ShareGrid inherits VerticalLayout {
     }
 }
 
-export component ShareSheets inherits Page {
+component ShareTab {
+    in property <string> text;
+    in property <bool> selected;
+    in property <bool> viewed;
+    callback clicked();
+    height: 48px;
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.selected ? Prime.copper-soft : transparent;
+        border-width: root.selected ? 1px : 0;
+        border-color: Prime.line-accent;
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+
+            if root.viewed: VerticalLayout {
+                alignment: center;
+
+                Icon {
+                    source: Icons.check;
+                    tint: root.selected ? Prime.copper-ink : Prime.ink-muted;
+                    size: 14px;
+                }
+            }
+
+            Text {
+                text: root.text;
+                color: root.selected ? Prime.copper-ink : Prime.ink-muted;
+                font-family: Prime.text-font;
+                font-size: 14px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component ShareSheets inherits Screen {
     property <int> tab: 0;
     property <bool> seen-2;
     property <bool> seen-3;
+    property <bool> all-seen: root.seen-2 && root.seen-3;
+    property <int> seen-count: 1 + (root.seen-2 ? 1 : 0) + (root.seen-3 ? 1 : 0);
+
+    function open(index: int) {
+        root.tab = index;
+        if index == 1 {
+            root.seen-2 = true;
+        }
+        if index == 2 {
+            root.seen-3 = true;
+        }
+    }
 
     ScreenHeader {
         title: "Your shares";
+        trailing: "\{root.seen-count} / 3 viewed";
+        done: root.all-seen;
         back => {
             Callbacks.penlock-close();
         }
     }
 
-    SegmentedControl {
-        options: ["Share 1", "Share 2", "Share 3"];
-        selected-index: root.tab;
-        changed(index, _) => {
-            root.tab = index;
-            if index == 1 {
-                root.seen-2 = true;
+    Content {
+        Rectangle {
+            height: 58px;
+            border-radius: self.height / 2;
+            background: Prime.surface-sunken;
+            border-width: 1px;
+            border-color: Prime.line;
+
+            HorizontalLayout {
+                padding: 4px;
+                spacing: 4px;
+
+                ShareTab {
+                    width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                    text: "Share 1";
+                    selected: root.tab == 0;
+                    viewed: true;
+                    clicked => {
+                        root.open(0);
+                    }
+                }
+
+                ShareTab {
+                    width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                    text: "Share 2";
+                    selected: root.tab == 1;
+                    viewed: root.seen-2;
+                    clicked => {
+                        root.open(1);
+                    }
+                }
+
+                ShareTab {
+                    width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                    text: "Share 3";
+                    selected: root.tab == 2;
+                    viewed: root.seen-3;
+                    clicked => {
+                        root.open(2);
+                    }
+                }
             }
-            if index == 2 {
-                root.seen-3 = true;
+        }
+
+        Rectangle {
+            height: 16px;
+        }
+
+        HorizontalLayout {
+            spacing: 12px;
+
+            Label {
+                horizontal-stretch: 1;
+                text: "Copy onto its own strip, shaded boxes first.";
+                wrap: no-wrap;
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Rectangle {
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 3px;
+                        border-width: 1px;
+                        border-color: Prime.line-accent;
+                        background: Prime.copper-soft;
+                    }
+                }
+
+                Caption {
+                    text: "First";
+                    color: Prime.ink-muted;
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            border-radius: 12px;
+            background: Prime.surface-raised;
+            border-width: 1px;
+            border-color: Prime.line;
+            clip: true;
+
+            Flickable {
+                viewport-height: grid.preferred-height;
+
+                grid := ShareGrid {
+                    rows: PenlockState.shares[root.tab].rows;
+                }
+            }
+        }
+
+        Rectangle {
+            height: 8px;
+        }
+
+        HorizontalLayout {
+            alignment: center;
+            spacing: 6px;
+
+            Icon {
+                source: Icons.chevron-down;
+                tint: Prime.ink-faint;
+                size: 14px;
+            }
+
+            Caption {
+                text: "Scroll for more rows";
+                wrap: no-wrap;
             }
         }
     }
 
-    Helper {
-        text: "Copy share \{root.tab + 1} onto its own worksheet strip, shaded boxes first. Keep the three strips in different places.";
-    }
+    Footer {
+        spacing: 8px;
 
-    Flickable {
-        vertical-stretch: 1;
+        Action {
+            text: root.all-seen ? "I've copied all three" : "Next: share \{root.seen-2 ? 3 : 2}";
+            has-icon: !root.all-seen;
+            icon-after: true;
+            icon: Icons.arrow-right;
+            clicked => {
+                if root.all-seen {
+                    Callbacks.penlock-close();
+                } else {
+                    root.open(root.seen-2 ? 2 : 1);
+                }
+            }
+        }
 
-        ShareGrid {
-            rows: PenlockState.shares[root.tab].rows;
+        // Signing clears the other shares from this screen, so they have to be copied first.
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Sign with share \{root.tab + 1} on this Passport";
+            has-icon: true;
+            icon: Icons.pen;
+            disabled: !root.all-seen;
+            clicked => {
+                Callbacks.sign-with-sheet(root.tab);
+            }
         }
     }
+}
 
-    Button {
-        width: 100%;
-        text: root.seen-2 && root.seen-3 ? "I've copied all three" : "View all three shares to finish";
-        size: ControlSize.lg;
-        full-width: true;
-        disabled: !(root.seen-2 && root.seen-3);
-        clicked => {
-            Callbacks.penlock-close();
+// The corners of the scan frame.
+component FrameCorners {
+    in property <color> tint;
+    property <length> arm: 36px;
+    property <length> weight: 3px;
+
+    for corner in [
+        { right: false, bottom: false },
+        { right: true, bottom: false },
+        { right: false, bottom: true },
+        { right: true, bottom: true },
+    ]: Rectangle {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+
+        Rectangle {
+            x: corner.right ? parent.width - root.arm : 0;
+            y: corner.bottom ? parent.height - root.weight : 0;
+            width: root.arm;
+            height: root.weight;
+            border-radius: 1.5px;
+            background: root.tint;
+        }
+
+        Rectangle {
+            x: corner.right ? parent.width - root.weight : 0;
+            y: corner.bottom ? parent.height - root.arm : 0;
+            width: root.weight;
+            height: root.arm;
+            border-radius: 1.5px;
+            background: root.tint;
+        }
+    }
+}
+
+component ShareTile {
+    in property <string> name;
+    in property <bool> read;
+    height: 56px;
+
+    Rectangle {
+        border-radius: 12px;
+        background: root.read ? Prime.success-soft : transparent;
+        border-width: 1px;
+        border-color: root.read ? Prime.success : Prime.line-strong;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        padding-left: 12px;
+        spacing: 2px;
+
+        Text {
+            text: root.name;
+            color: Prime.ink;
+            font-family: Prime.text-font;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        HorizontalLayout {
+            alignment: start;
+            spacing: 4px;
+
+            if root.read: Icon {
+                source: Icons.check;
+                tint: Prime.success;
+                size: 12px;
+            }
+
+            Caption {
+                text: root.read ? "Read" : "Not read";
+                color: root.read ? Prime.success : Prime.ink-faint;
+                font-weight: root.read ? 600 : 400;
+            }
         }
     }
 }
 
 export component ScanShares inherits Rectangle {
-    background: Theme.palette-background;
+    background: Prime.surface;
+    property <int> read-count: (PenlockState.have[0] ? 1 : 0) + (PenlockState.have[1] ? 1 : 0) + (PenlockState.have[2] ? 1 : 0);
+    property <bool> phrase: PenlockState.scan-phrase;
+    property <bool> qr: PenlockState.scan-qr;
 
     ScreenHeader {
-        x: Theme.spacing-xl;
-        y: Theme.spacing-lg + UISize.control-center-status-bar-height;
-        width: parent.width - 2 * Theme.spacing-xl;
-        title: "Restore from shares";
+        y: Prime.status-bar;
+        width: parent.width;
+        title: root.qr ? PenlockState.scan-title : root.phrase ? "Read a written phrase" : "Restore from shares";
         back => {
-            Callbacks.penlock-close();
+            if root.qr {
+                Callbacks.scan-qr-cancel();
+            } else {
+                Callbacks.penlock-close();
+            }
         }
     }
 
+    // A full-width square: the camera draws a fixed 480 × 480 picture at this position.
     viewfinder := Rectangle {
         x: 0;
         y: PenlockState.viewfinder-y;
         width: parent.width;
         height: self.width;
-        background: black;
+        background: Prime.surface-sunken;
         clip: true;
 
         Image {
@@ -245,109 +829,173 @@ export component ScanShares inherits Rectangle {
             image-fit: cover;
         }
 
-        // A share strip is tall and narrow: frame it that way.
-        Rectangle {
-            width: parent.width * 0.6;
-            height: parent.height * 0.88;
-            border-width: 3px;
-            border-radius: 18px;
-            border-color: PenlockState.reader-ready ? white : white.with-alpha(0.45);
+        // A share strip is tall and narrow: frame it that way. A phrase fills the page.
+        FrameCorners {
+            width: parent.width * (root.phrase ? 0.92 : root.qr ? 0.76 : 0.6);
+            height: parent.height * (root.qr ? 0.76 : 0.84);
+            tint: PenlockState.scan-hit ? Prime.success : Prime.ink;
         }
 
-        if !PenlockState.camera-live: Spinner { }
-
-        status := Rectangle {
-            y: parent.height - self.height - Theme.spacing-lg;
-            height: 40px;
-            width: min(parent.width - 2 * Theme.spacing-xl, status-text.preferred-width + 2 * Theme.spacing-lg);
+        Rectangle {
+            y: parent.height - self.height - 14px;
+            height: 32px;
+            width: min(parent.width - 2 * Prime.gutter, status.preferred-width);
             border-radius: self.height / 2;
-            background: black.with-alpha(0.65);
+            background: PenlockState.scan-hit ? Prime.success-soft : Prime.surface-raised;
+            border-width: 1px;
+            border-color: PenlockState.scan-hit ? Prime.success : Prime.line;
 
-            status-text := Text {
-                text: PenlockState.scan-status;
-                color: white;
-                font-family: Theme.font-primary;
-                font-size: Theme.font-size-label;
-                font-weight: Theme.font-weight-semibold;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                overflow: elide;
+            status := HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+                spacing: 8px;
+
+                if PenlockState.scan-hit: VerticalLayout {
+                    alignment: center;
+
+                    Icon {
+                        source: Icons.check;
+                        tint: Prime.success;
+                        size: 16px;
+                    }
+                }
+
+                if !PenlockState.scan-hit: VerticalLayout {
+                    alignment: center;
+
+                    Rectangle {
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 4px;
+                        background: Prime.copper;
+                    }
+                }
+
+                Text {
+                    text: PenlockState.scan-status;
+                    color: PenlockState.scan-hit ? Prime.success : Prime.ink;
+                    font-family: Prime.text-font;
+                    font-size: 14px;
+                    font-weight: 500;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
             }
         }
     }
 
     VerticalLayout {
-        x: Theme.spacing-xl;
-        y: viewfinder.y + viewfinder.height + Theme.spacing-lg;
-        width: parent.width - 2 * Theme.spacing-xl;
-        height: parent.height - self.y - Theme.spacing-xl;
+        x: Prime.gutter;
+        y: viewfinder.y + viewfinder.height + 16px;
+        width: parent.width - 2 * Prime.gutter;
+        height: parent.height - self.y - 24px;
         alignment: start;
-        spacing: Theme.spacing-md;
+        spacing: 8px;
 
-        HorizontalLayout {
-            alignment: center;
-            spacing: Theme.spacing-sm;
+        if root.qr: Note {
+            icon: Icons.frame;
+            text: "Hold the code steady and fill the frame.";
+        }
 
-            for i in 3: Chip {
-                text: "Share \{i + 1}";
-                color: PenlockState.have[i] ? ChipColor.success : ChipColor.default;
-                icon: PenlockState.have[i] ? Images.icon("check", 16px) : @image-url("");
+        if !root.qr: HorizontalLayout {
+            Eyebrow {
+                horizontal-stretch: 1;
+                text: root.phrase ? "WORDS READ" : "SHARES READ";
+            }
+
+            Code {
+                text: root.phrase ? "\{PenlockState.words-read}" : "\{root.read-count} of 2";
+                color: PenlockState.draft-ready && PenlockState.draft-complete ? Prime.success : Prime.ink;
             }
         }
 
-        if PenlockState.scan-error != "": Text {
-            text: PenlockState.scan-error;
-            color: Theme.palette-danger;
-            font-family: Theme.font-primary;
-            font-size: Theme.font-size-helper;
-            horizontal-alignment: center;
-            wrap: word-wrap;
+        if !root.phrase && !root.qr: HorizontalLayout {
+            spacing: 8px;
+
+            for i in 3: ShareTile {
+                width: (root.width - 2 * Prime.gutter - 16px) / 3;
+                name: "Share \{i + 1}";
+                read: PenlockState.have[i];
+            }
         }
 
-        if PenlockState.scan-error == "": Helper {
-            text: "Scan any two of your three strips, one at a time. Keep the strip flat and inside the frame.";
+        if PenlockState.scan-error != "": Label {
+            text: PenlockState.scan-error;
+            color: PenlockState.scan-failed ? Prime.danger : Prime.ink-muted;
+        }
+
+        if !root.phrase && !root.qr && PenlockState.can-sign-share: Action {
+            kind: ActionKind.secondary;
+            text: "Sign with share \{PenlockState.read-share}";
+            has-icon: true;
+            icon: Icons.pen;
+            clicked => {
+                Callbacks.sign-with-scanned();
+            }
+        }
+
+        if root.phrase && PenlockState.scan-error == "" && !PenlockState.draft-ready: VerticalLayout {
+            spacing: 4px;
+
+            Note {
+                icon: Icons.frame;
+                text: "Fill the frame with your written words.";
+            }
+
+            Note {
+                icon: Icons.sun;
+                text: "Use good, even light.";
+            }
+        }
+
+        if root.phrase: Action {
+            text: PenlockState.draft-ready ? "Review \{PenlockState.words-read} words" : "Review what was read";
+            disabled: !PenlockState.draft-ready;
+            has-icon: PenlockState.draft-ready;
+            icon-after: true;
+            icon: Icons.arrow-right;
+            clicked => {
+                Callbacks.review-draft();
+            }
         }
     }
 }
 
-component WordCell inherits Rectangle {
+component RevealedWord {
     in property <int> number;
     in property <string> word;
-    height: 44px;
-    border-radius: 12px;
-    border-width: 1px;
-    border-color: Theme.palette-border;
-    background: Theme.palette-surface;
+    height: 30px;
 
     HorizontalLayout {
-        padding-left: Theme.spacing-md;
-        padding-right: Theme.spacing-md;
-        spacing: Theme.spacing-sm;
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 10px;
 
         Text {
-            width: 24px;
+            width: 20px;
             text: root.number;
-            color: Theme.palette-muted;
-            font-family: Theme.font-primary;
-            font-size: Theme.font-size-label;
+            color: Prime.ink-faint;
+            font-family: Prime.mono-font;
+            font-size: 12px;
             horizontal-alignment: right;
             vertical-alignment: center;
         }
 
-        Text {
+        Code {
+            horizontal-stretch: 1;
             text: root.word;
-            color: Theme.palette-foreground;
-            font-family: Theme.font-primary;
-            font-size: Theme.font-size-subtitle;
-            font-weight: Theme.font-weight-semibold;
+            font-size: 16px;
+            font-weight: 500;
             vertical-alignment: center;
+            overflow: elide;
         }
     }
 }
 
-export component Recovered inherits Page {
+export component Recovered inherits Screen {
     property <bool> revealed;
     property <int> half: floor((PenlockState.words.length + 1) / 2);
+    property <bool> recheck: PenlockState.corrections.length > 0;
 
     ScreenHeader {
         title: "Phrase recovered";
@@ -356,79 +1004,248 @@ export component Recovered inherits Page {
         }
     }
 
-    Card {
-        width: 100%;
-        icon: Images.icon("check-circle", 24px);
-        accent-color: Theme.color-success;
-        selected: true;
-        eyebrow: "RECOVERED";
-        title: "\{PenlockState.words.length} words";
-        subtitle: PenlockState.result-subtitle;
+    Content {
+        Rectangle {
+            border-radius: 12px;
+            background: Prime.success-soft;
+            border-width: 1px;
+            border-color: Prime.success;
+            height: summary.preferred-height;
+
+            summary := HorizontalLayout {
+                padding: root.revealed ? 12px : 16px;
+                spacing: 12px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Rectangle {
+                        width: 40px;
+                        height: 40px;
+                        border-radius: 20px;
+                        border-width: 2px;
+                        border-color: Prime.success;
+
+                        Icon {
+                            source: Icons.check;
+                            tint: Prime.success;
+                            size: 20px;
+                        }
+                    }
+                }
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+
+                    if !root.revealed: Eyebrow {
+                        text: "RECOVERED";
+                        color: Prime.success;
+                    }
+
+                    Heading {
+                        text: root.revealed ? "\{PenlockState.words.length} words recovered" : "\{PenlockState.words.length} words";
+                        font-size: root.revealed ? 20px : 24px;
+                    }
+
+                    Label {
+                        text: PenlockState.result-subtitle;
+                    }
+                }
+            }
+        }
+
+        if root.recheck: Rectangle {
+            height: 12px;
+        }
+
+        if root.recheck: Rectangle {
+            border-radius: 12px;
+            background: Prime.surface-raised;
+            border-width: 1px;
+            border-color: Prime.line;
+            height: recheck-card.preferred-height;
+
+            recheck-card := HorizontalLayout {
+                padding-top: 12px;
+                padding-bottom: 12px;
+                padding-left: 16px;
+                padding-right: 16px;
+                spacing: 12px;
+
+                Icon {
+                    source: Icons.alert;
+                    tint: Prime.warning;
+                }
+
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 4px;
+
+                    Eyebrow {
+                        text: "RECHECK ON PAPER";
+                        color: Prime.warning;
+                    }
+
+                    Label {
+                        text: PenlockState.corrections[0] + (PenlockState.corrections.length > 1 ? "\n" + PenlockState.corrections[1] : "") + (PenlockState.corrections.length > 2 ? "\n…and \{PenlockState.corrections.length - 2} more" : "");
+                        color: Prime.ink;
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            height: root.revealed ? 4px : 24px;
+        }
+
+        HorizontalLayout {
+            height: root.revealed ? 44px : 20px;
+
+            Eyebrow {
+                horizontal-stretch: 1;
+                text: "YOUR PHRASE";
+                vertical-alignment: center;
+            }
+
+            if !root.revealed: HorizontalLayout {
+                spacing: 6px;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Icon {
+                        source: Icons.eye-off;
+                        tint: Prime.ink-faint;
+                        size: 14px;
+                    }
+                }
+
+                Caption {
+                    text: "Hidden";
+                    vertical-alignment: center;
+                    wrap: no-wrap;
+                }
+            }
+
+            if root.revealed: Rectangle {
+                width: 80px;
+
+                HorizontalLayout {
+                    alignment: end;
+                    spacing: 6px;
+
+                    VerticalLayout {
+                        alignment: center;
+
+                        Icon {
+                            source: Icons.eye-off;
+                            tint: Prime.copper-ink;
+                            size: 16px;
+                        }
+                    }
+
+                    Label {
+                        text: "Hide";
+                        color: Prime.copper-ink;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                        wrap: no-wrap;
+                    }
+                }
+
+                TouchArea {
+                    clicked => {
+                        root.revealed = false;
+                    }
+                }
+            }
+        }
+
+        if !root.revealed: VerticalLayout {
+            padding-top: 12px;
+            spacing: 8px;
+
+            SlideToConfirm {
+                height: 64px;
+                thumb-width: 54px;
+                hint: "Slide to show phrase";
+                label: "";
+                confirmed-label: "";
+                control-height: 64px;
+                border-radius: 32px;
+                thumb-border-radius: 27px;
+                track-color: Prime.surface-sunken;
+                track-border-color: Prime.line-strong;
+                label-color: Prime.ink-muted;
+                thumb-color: Prime.copper;
+                thumb-label-color: Prime.on-copper;
+                font-family: Prime.text-font;
+                activated => {
+                    root.revealed = true;
+                }
+            }
+
+            Caption {
+                text: "Make sure no one can see your screen.";
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.revealed: Rectangle {
+            vertical-stretch: 1;
+            border-radius: 12px;
+            background: Prime.surface-sunken;
+            clip: true;
+
+            Flickable {
+                viewport-height: word-list.preferred-height;
+
+                // Column-major, like a recovery card: 1–6 on the left, 7–12 on the right.
+                word-list := VerticalLayout {
+                    alignment: start;
+                    padding: 12px;
+                    spacing: 4px;
+
+                    for r in root.half: HorizontalLayout {
+                        spacing: 12px;
+
+                        RevealedWord {
+                            width: (root.width - 2 * Prime.gutter - 36px) / 2;
+                            number: r + 1;
+                            word: PenlockState.words[r];
+                        }
+
+                        RevealedWord {
+                            width: (root.width - 2 * Prime.gutter - 36px) / 2;
+                            visible: r + root.half < PenlockState.words.length;
+                            number: r + root.half + 1;
+                            word: PenlockState.words[r + root.half];
+                        }
+                    }
+                }
+            }
+        }
+
+        if !root.revealed: Rectangle {
+            vertical-stretch: 1;
+        }
     }
 
-    if PenlockState.corrections.length > 0: Card {
-        width: 100%;
-        size: ControlSize.sm;
-        icon: Images.icon("alert", 24px);
-        eyebrow: "RECHECK ON PAPER";
-        body: PenlockState.corrections[0] + (PenlockState.corrections.length > 1 ? "\n" + PenlockState.corrections[1] : "") + (PenlockState.corrections.length > 2 ? "\n…and \{PenlockState.corrections.length - 2} more" : "");
-    }
-
-    if !root.revealed: VerticalLayout {
-        vertical-stretch: 1;
-        alignment: center;
-        spacing: Theme.spacing-md;
-
-        Button {
-            width: 100%;
-            text: "Show phrase";
-            start-icon: Images.icon("eye", 24px);
-            variant: ButtonVariant.secondary;
-            full-width: true;
+    Footer {
+        Action {
+            text: "Done";
             clicked => {
-                root.revealed = true;
+                Callbacks.penlock-close();
             }
         }
 
-        Helper {
-            text: "Make sure no one can see your screen.";
-        }
-    }
-
-    if root.revealed: Flickable {
-        vertical-stretch: 1;
-
-        // Column-major, like a recovery card: 1–6 on the left, 7–12 on the right.
-        VerticalLayout {
-            alignment: start;
-            spacing: Theme.spacing-sm;
-
-            for r in root.half: HorizontalLayout {
-                spacing: Theme.spacing-sm;
-
-                WordCell {
-                    horizontal-stretch: 1;
-                    number: r + 1;
-                    word: PenlockState.words[r];
-                }
-
-                WordCell {
-                    horizontal-stretch: 1;
-                    visible: r + root.half < PenlockState.words.length;
-                    number: r + root.half + 1;
-                    word: PenlockState.words[r + root.half];
-                }
+        Action {
+            kind: ActionKind.secondary;
+            text: "Open wallet";
+            clicked => {
+                Callbacks.wallet-from-recovered();
             }
-        }
-    }
-
-    Button {
-        width: 100%;
-        text: "Done";
-        size: ControlSize.lg;
-        full-width: true;
-        clicked => {
-            Callbacks.penlock-close();
         }
     }
 }

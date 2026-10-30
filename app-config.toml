@@ -3,9 +3,9 @@
 
 # Foundation application configuration
 app-name = "my-app"
-friendly-app-name = "Cashu and Penlock"
-launcher-app-name = "Cashu"
-description = "Offline Cashu ecash wallet and Penlock 2-of-3 seed backups, with on-device share scanning"
+friendly-app-name = "Penlock"
+launcher-app-name = "Penlock"
+description = "Penlock 2-of-3 seed backups, with on-device share scanning"
 icon = "resources/icon.svg"
 theme = "resources/theme.json"
 app-id = "0x42db7fd99731e3189e8c07383b9c35c3"
@@ -17,10 +17,4 @@ contact-email = ""
 support-url = ""
 
 [permissions]
-template = ["gui-app", "fs-generic", "camera"]
-
-# Launcher QR tile hands cashuA/cashuB tokens (optionally behind a cashu: URI) to this app.
-[[qr-match-rules]]
-id = "cashu-token"
-id-localizations = { en = "Cashu token" }
-sub-rules = { qr = { QR = { regex-pattern = "^(cashu:)?cashu[AB]" } } }
+template = ["gui-app", "camera"]

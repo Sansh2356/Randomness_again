@@ -1,4 +1,4 @@
 getrandom 0.4.3 from crates.io, plus a `keyos` backend (src/backends/keyos.rs and its branch in
 src/backends.rs) that delegates to the SDK's patched getrandom 0.2 (hardware TRNG). Needed because
-rand 0.10 (imageproc, tract) and uuid (cashu) use getrandom 0.4, which has no Xous backend and only
+rand 0.10 (imageproc, tract) uses getrandom 0.4, which has no Xous backend and only
 selects custom backends via RUSTFLAGS, which the foundation CLI owns.

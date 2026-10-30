@@ -1,117 +1,701 @@
 // SPDX-FileCopyrightText: 2026 Foundation Devices, Inc. <hello@foundation.xyz>
 // SPDX-License-Identifier: MIT
 
-import { Theme, ControlSize, ButtonVariant, Images } from "@ui/theme.slint";
-import { Button } from "@ui/button.slint";
-import { Card } from "@ui/card.slint";
-import { AppState, Callbacks } from "callbacks.slint";
-import { SectionLabel, Helper, ScreenHeader, Page } from "common.slint";
+import { SlideToConfirm } from "@ui/slide_to_confirm.slint";
+import { TextArea } from "@ui/textarea.slint";
+import { AddressRow, Callbacks, QrKind, WalletState } from "callbacks.slint";
+import {
+    Action,
+    ActionKind,
+    Body,
+    Caption,
+    Code,
+    Content,
+    Eyebrow,
+    Footer,
+    Heading,
+    IconTile,
+    Icons,
+    Label,
+    NavCard,
+    Note,
+    Prime,
+    Screen,
+    ScreenHeader,
+    ValueWell,
+} from "common.slint";
 
-// The wallet section's body, below the section switcher.
-export component WalletHome inherits VerticalLayout {
-    spacing: Theme.spacing-lg;
-
-    Card {
-        width: 100%;
-        eyebrow: "BALANCE";
-        title: AppState.balance;
-        subtitle: AppState.notes.length == 0 ? "No notes yet" : AppState.notes.length == 1 ? "1 note held offline" : "\{AppState.notes.length} notes held offline";
-        footer: "Received tokens aren't checked with the mint until someone online redeems them.";
-    }
-
-    SectionLabel {
-        text: "NOTES";
-    }
-
-    Flickable {
-        vertical-stretch: 1;
-
-        VerticalLayout {
-            alignment: start;
-            spacing: Theme.spacing-sm;
-
-            if AppState.notes.length == 0: Helper {
-                text: "Scan a Cashu QR code to receive ecash.";
-                font-size: Theme.font-size-subtitle;
-            }
-
-            for note[i] in AppState.notes: Card {
-                width: 100%;
-                size: ControlSize.sm;
-                interactive: true;
-                title: note.amount;
-                subtitle: note.mint;
-                clicked => {
-                    Callbacks.select-note(i);
-                }
-            }
+// Where the signing key comes from.
+export component WalletLoad inherits Screen {
+    ScreenHeader {
+        title: "MuSig wallet";
+        back => {
+            Callbacks.penlock-close();
         }
     }
 
-    Button {
-        width: 100%;
-        text: "Scan to receive";
-        start-icon: Images.icon("scan-qr", 24px);
-        size: ControlSize.lg;
-        full-width: true;
-        clicked => {
-            Callbacks.scan-receive();
+    Content {
+        spacing: 12px;
+
+        Body {
+            text: "Choose what this Passport signs with. Your cosigners sign with theirs.";
+        }
+
+        Rectangle {
+            height: 12px;
+        }
+
+        NavCard {
+            icon: Icons.one-share;
+            title: "Sign with one share";
+            subtitle: "Another device signs with another share";
+            clicked => {
+                Callbacks.penlock-scan();
+            }
+        }
+
+        NavCard {
+            icon: Icons.seed;
+            title: "Sign with a seed phrase";
+            subtitle: "This phrase is one participant";
+            clicked => {
+                Callbacks.penlock-create();
+            }
+        }
+
+        if WalletState.simulator: VerticalLayout {
+            padding-top: 20px;
+            spacing: 12px;
+
+            Eyebrow {
+                text: "TESTING";
+            }
+
+            NavCard {
+                icon: Icons.paste;
+                title: "Paste a share";
+                test-only: true;
+                clicked => {
+                    Callbacks.wallet-paste-share();
+                }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
         }
     }
 }
 
-// Send sheet: the note as a QR for the receiver to scan.
-export component SendSheet inherits Rectangle {
-    background: Theme.palette-background;
+component WalletTile {
+    in property <image> icon;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> disabled;
+    callback clicked();
+    height: 120px;
+    opacity: root.disabled ? 0.4 : 1;
 
-    // Swallow touches meant for the list underneath.
-    TouchArea { }
+    Rectangle {
+        border-radius: 12px;
+        background: Prime.surface-raised;
+        border-width: 1px;
+        border-color: Prime.line;
+    }
 
-    Page {
-        ScreenHeader {
-            title: "Send";
-            back => {
-                Callbacks.close-note();
+    VerticalLayout {
+        padding: 16px;
+
+        HorizontalLayout {
+            alignment: start;
+
+            IconTile {
+                size: 40px;
+                icon: root.icon;
             }
-        }
-
-        Card {
-            width: 100%;
-            title: AppState.notes[AppState.selected].amount;
-            subtitle: AppState.notes[AppState.selected].mint;
-        }
-
-        // White quiet zone in both themes so any camera can read the code.
-        Rectangle {
-            property <length> qr-size: min(root.width - 2 * Theme.spacing-xl, 340px) - 2 * Theme.spacing-lg;
-            height: qr-size + 2 * Theme.spacing-lg;
-            background: white;
-            border-radius: Theme.radius-default;
-
-            Image {
-                width: qr-size;
-                height: qr-size;
-                source: AppState.qr;
-                image-fit: contain;
-            }
-        }
-
-        Helper {
-            text: "Once the receiver has scanned it, mark it sent. Until then it stays in your wallet.";
         }
 
         Rectangle {
             vertical-stretch: 1;
         }
 
-        Button {
-            width: 100%;
-            text: "Mark as sent";
-            variant: ButtonVariant.danger;
-            size: ControlSize.lg;
-            full-width: true;
+        Text {
+            text: root.title;
+            color: Prime.ink;
+            font-family: Prime.text-font;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        Caption {
+            text: root.subtitle;
+            color: Prime.ink-muted;
+            wrap: no-wrap;
+            overflow: elide;
+        }
+    }
+
+    TouchArea {
+        enabled: !root.disabled;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component WalletHome inherits Screen {
+    property <bool> ready: WalletState.cosigners > 0;
+
+    ScreenHeader {
+        title: "MuSig wallet";
+        trailing: "SIGNET";
+        pill: true;
+        back => {
+            Callbacks.penlock-close();
+        }
+    }
+
+    Content {
+        spacing: 16px;
+
+        Rectangle {
+            border-radius: 12px;
+            background: Prime.surface-accent;
+            border-width: 1px;
+            border-color: Prime.line-accent;
+            height: summary.preferred-height;
+
+            summary := VerticalLayout {
+                padding: 16px;
+                spacing: 4px;
+
+                Eyebrow {
+                    text: "\{WalletState.source} · YOUR KEY";
+                }
+
+                Heading {
+                    text: root.ready ? "\{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1} MuSig2" : "No cosigners yet";
+                    color: Prime.copper-ink;
+                }
+
+                Label {
+                    text: !root.ready ? "Check this key matches your setup." : WalletState.cosigners == 1 ? "You and 1 cosigner. Check this key matches your setup." : "You and \{WalletState.cosigners} cosigners. Check this key matches your setup.";
+                }
+
+                Rectangle {
+                    height: 8px;
+                }
+
+                ValueWell {
+                    label: "Fingerprint";
+                    value: WalletState.fingerprint;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 12px;
+
+            HorizontalLayout {
+                spacing: 12px;
+
+                WalletTile {
+                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                    icon: Icons.user;
+                    title: "Show my key";
+                    subtitle: "For your cosigners to add";
+                    clicked => {
+                        Callbacks.wallet-show-key();
+                    }
+                }
+
+                WalletTile {
+                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                    icon: Icons.user-plus;
+                    title: "Add a cosigner";
+                    subtitle: "Scan their account key";
+                    clicked => {
+                        Callbacks.wallet-add-cosigner();
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 12px;
+
+                WalletTile {
+                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                    icon: Icons.receive;
+                    title: "Receive";
+                    subtitle: root.ready ? "Show a shared address" : "Add a cosigner first";
+                    disabled: !root.ready;
+                    clicked => {
+                        Callbacks.wallet-receive();
+                    }
+                }
+
+                WalletTile {
+                    width: (root.width - 2 * Prime.gutter - 12px) / 2;
+                    icon: Icons.sign;
+                    title: "Sign a transaction";
+                    subtitle: root.ready ? "Scan a PSBT" : "Add a cosigner first";
+                    disabled: !root.ready;
+                    clicked => {
+                        Callbacks.wallet-sign();
+                    }
+                }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+    }
+
+    Footer {
+        Action {
+            kind: ActionKind.secondary;
+            text: "Lock wallet";
+            has-icon: true;
+            icon: Icons.lock-wallet;
             clicked => {
-                Callbacks.mark-sent();
+                Callbacks.wallet-lock();
+            }
+        }
+    }
+}
+
+// An address in groups of four, its two ends picked out.
+component AddressWell {
+    in property <[AddressRow]> rows;
+    height: list.preferred-height;
+
+    Rectangle {
+        border-radius: 8px;
+        background: Prime.surface-sunken;
+    }
+
+    list := VerticalLayout {
+        padding-top: 12px;
+        padding-bottom: 12px;
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 2px;
+
+        for row in root.rows: HorizontalLayout {
+            alignment: start;
+            spacing: 10px;
+
+            for chunk in row.chunks: Code {
+                text: chunk.text;
+                font-size: 16px;
+                color: chunk.hot ? Prime.copper-ink : Prime.ink-muted;
+                font-weight: chunk.hot ? 500 : 400;
+            }
+        }
+    }
+}
+
+component Step {
+    in property <string> text;
+    in property <bool> done;
+    in property <bool> current;
+
+    VerticalLayout {
+        spacing: 6px;
+
+        Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: root.done ? Prime.success : root.current ? Prime.copper : Prime.line;
+        }
+
+        Text {
+            text: root.text;
+            color: root.done ? Prime.success : root.current ? Prime.copper-ink : Prime.ink-faint;
+            font-family: Prime.text-font;
+            font-size: 12px;
+            font-weight: root.done || root.current ? 600 : 400;
+        }
+    }
+}
+
+// Anything leaving the Passport: a key, an address, a PSBT.
+export component WalletQr inherits Screen {
+    property <QrKind> kind: WalletState.qr-kind;
+    property <bool> signing: root.kind != QrKind.key && root.kind != QrKind.address;
+    property <length> code-size: root.kind == QrKind.key ? 320px : root.kind == QrKind.address ? 296px : 304px;
+
+    ScreenHeader {
+        title: root.kind == QrKind.key ? "My key" : root.kind == QrKind.address ? "Receive" : "Sign transaction";
+        trailing: root.kind == QrKind.address ? WalletState.qr-title : "";
+        back => {
+            Callbacks.wallet-back();
+        }
+    }
+
+    Content {
+        if root.signing: HorizontalLayout {
+            spacing: 8px;
+
+            Step {
+                horizontal-stretch: 1;
+                text: root.kind == QrKind.nonces ? "1 · Nonces" : "Nonces";
+                current: root.kind == QrKind.nonces;
+                done: root.kind != QrKind.nonces;
+            }
+
+            Step {
+                horizontal-stretch: 1;
+                text: root.kind == QrKind.final-tx ? "Sign" : "2 · Sign";
+                current: root.kind == QrKind.partial;
+                done: root.kind == QrKind.final-tx;
+            }
+
+            Step {
+                horizontal-stretch: 1;
+                text: "3 · Broadcast";
+                current: root.kind == QrKind.final-tx;
+            }
+        }
+
+        if root.signing: Rectangle {
+            height: 16px;
+        }
+
+        // White in both themes so any camera can read the code.
+        Rectangle {
+            height: root.code-size + 2 * (root.signing ? 20px : 24px);
+            border-radius: 24px;
+            background: white;
+
+            Image {
+                width: root.code-size;
+                height: root.code-size;
+                source: WalletState.qr;
+                image-fit: contain;
+                image-rendering: pixelated;
+            }
+        }
+
+        Rectangle {
+            height: 16px;
+        }
+
+        if root.kind == QrKind.key: VerticalLayout {
+            spacing: 16px;
+
+            ValueWell {
+                label: "Fingerprint";
+                value: WalletState.fingerprint;
+            }
+
+            Note {
+                icon: Icons.info;
+                tint: Prime.success;
+                text: WalletState.qr-caption;
+            }
+        }
+
+        if root.kind == QrKind.address: VerticalLayout {
+            spacing: 8px;
+
+            HorizontalLayout {
+                Eyebrow {
+                    horizontal-stretch: 1;
+                    text: "SHARED ADDRESS";
+                }
+
+                Caption {
+                    text: "Signet · \{WalletState.cosigners + 1}-of-\{WalletState.cosigners + 1}";
+                    wrap: no-wrap;
+                }
+            }
+
+            AddressWell {
+                rows: WalletState.address-rows;
+            }
+        }
+
+        if root.signing: VerticalLayout {
+            spacing: 4px;
+
+            Eyebrow {
+                text: root.kind == QrKind.nonces ? "ROUND 1 OF 2" : root.kind == QrKind.partial ? "PARTIAL SIGNATURE" : "FULLY SIGNED";
+                color: root.kind == QrKind.final-tx ? Prime.success : Prime.copper;
+            }
+
+            Body {
+                text: WalletState.qr-caption;
+                color: Prime.ink;
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+    }
+
+    Footer {
+        if root.kind == QrKind.address: Action {
+            kind: ActionKind.secondary;
+            text: "Next address";
+            has-icon: true;
+            icon-after: true;
+            icon: Icons.arrow-right;
+            clicked => {
+                Callbacks.wallet-next-address();
+            }
+        }
+
+        if root.kind == QrKind.nonces || root.kind == QrKind.partial: Action {
+            text: root.kind == QrKind.nonces ? "Scan their PSBT" : "Scan the signed PSBT";
+            has-icon: true;
+            icon: Icons.scan;
+            clicked => {
+                Callbacks.wallet-sign();
+            }
+        }
+
+        if root.kind == QrKind.nonces || root.kind == QrKind.partial: Action {
+            kind: ActionKind.tertiary;
+            text: "Done for now";
+            clicked => {
+                Callbacks.wallet-back();
+            }
+        }
+
+        if root.kind != QrKind.nonces && root.kind != QrKind.partial: Action {
+            text: "Done";
+            clicked => {
+                Callbacks.wallet-back();
+            }
+        }
+    }
+}
+
+// The simulator has no one to hold a QR code up to its camera, so text can be pasted in instead.
+export component WalletInput inherits Screen {
+    ScreenHeader {
+        title: WalletState.input-title;
+        trailing: "Simulator only";
+        pill: true;
+        pill-caution: true;
+        back => {
+            Callbacks.wallet-back();
+        }
+    }
+
+    Content {
+        spacing: 8px;
+
+        Label {
+            text: "Paste";
+            font-weight: 500;
+        }
+
+        TextArea {
+            vertical-stretch: 0;
+            height: 120px;
+            field-min-height: 120px;
+            disable-autosize: true;
+            placeholder: "Paste the text";
+            value <=> WalletState.input;
+            background: Prime.surface-sunken;
+            foreground: Prime.ink;
+            placeholder-color: Prime.ink-faint;
+            border-color: Prime.line-strong;
+            border-radius: 8px;
+            font-family: Prime.mono-font;
+            font-size: 14px;
+        }
+
+        Caption {
+            text: "For testing in the simulator. On a Passport, scan a QR code instead.";
+        }
+
+        // Under the field, because the keyboard covers the bottom of the screen.
+        Rectangle {
+            height: 4px;
+        }
+
+        Action {
+            text: "Use this";
+            disabled: WalletState.input == "";
+            clicked => {
+                Callbacks.wallet-submit(WalletState.input);
+            }
+        }
+
+        Action {
+            kind: ActionKind.secondary;
+            text: "Scan a QR code";
+            has-icon: true;
+            icon: Icons.qr;
+            clicked => {
+                Callbacks.wallet-scan();
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+        }
+    }
+}
+
+component ReviewRow {
+    in property <string> label;
+    in property <string> amount;
+    in property <bool> last;
+    height: 52px;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+
+        Label {
+            horizontal-stretch: 1;
+            text: root.label;
+            vertical-alignment: center;
+            wrap: no-wrap;
+        }
+
+        Code {
+            text: root.amount;
+            vertical-alignment: center;
+        }
+    }
+
+    if !root.last: Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        background: Prime.line;
+    }
+}
+
+export component WalletReview inherits Screen {
+    ScreenHeader {
+        title: "Review transaction";
+        back => {
+            Callbacks.wallet-cancel();
+        }
+    }
+
+    Content {
+        Flickable {
+            vertical-stretch: 1;
+            viewport-height: review.preferred-height;
+
+            review := VerticalLayout {
+                alignment: start;
+                spacing: 8px;
+
+                Eyebrow {
+                    text: "YOU'RE SENDING";
+                }
+
+                HorizontalLayout {
+                    alignment: start;
+                    spacing: 10px;
+
+                    // Long totals drop a size: every digit has to stay on screen.
+                    Text {
+                        text: WalletState.send-total;
+                        color: Prime.ink;
+                        font-family: Prime.display-font;
+                        font-size: WalletState.send-total-long ? 40px : 56px;
+                        font-weight: 300;
+                    }
+
+                    Text {
+                        text: "sats";
+                        color: Prime.ink-muted;
+                        font-family: Prime.text-font;
+                        font-size: 16px;
+                        vertical-alignment: bottom;
+                    }
+                }
+
+                for send in WalletState.sends: VerticalLayout {
+                    spacing: 8px;
+
+                    Label {
+                        text: WalletState.sends.length > 1 ? "To, \{send.amount} sats" : "To";
+                        font-weight: 500;
+                    }
+
+                    AddressWell {
+                        rows: send.rows;
+                    }
+                }
+
+                Rectangle {
+                    height: 8px;
+                }
+
+                Rectangle {
+                    height: 104px;
+                    border-radius: 12px;
+                    background: Prime.surface-raised;
+                    border-width: 1px;
+                    border-color: Prime.line;
+
+                    VerticalLayout {
+                        ReviewRow {
+                            label: "Change, back to this wallet";
+                            amount: "\{WalletState.change} sats";
+                        }
+
+                        ReviewRow {
+                            label: "Network fee";
+                            amount: "\{WalletState.fee} sats";
+                            last: true;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 8px;
+                }
+
+                Note {
+                    icon: Icons.alert;
+                    tint: Prime.warning;
+                    text: "Check the address against the one you meant to pay, not just the highlighted ends.";
+                    text-color: Prime.ink;
+                }
+            }
+        }
+    }
+
+    Footer {
+        spacing: 8px;
+
+        SlideToConfirm {
+            height: 64px;
+            thumb-width: 54px;
+            hint: "Slide to approve";
+            label: "";
+            confirmed-label: "";
+            control-height: 64px;
+            border-radius: 32px;
+            thumb-border-radius: 27px;
+            track-color: Prime.surface-sunken;
+            track-border-color: Prime.line-strong;
+            label-color: Prime.ink-muted;
+            thumb-color: Prime.copper;
+            thumb-label-color: Prime.on-copper;
+            font-family: Prime.text-font;
+            activated => {
+                Callbacks.wallet-approve();
+            }
+        }
+
+        Action {
+            kind: ActionKind.tertiary;
+            text: "Cancel";
+            clicked => {
+                Callbacks.wallet-cancel();
             }
         }
     }
