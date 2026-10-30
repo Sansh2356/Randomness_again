@@ -6,10 +6,6 @@ Paper seed backups and multisig signing for [Passport Prime](https://foundation.
 > run in the KeyOS simulator, and coins in these wallets can only be spent with this code. The wallet defaults to signet;
 > mainnet is an opt-in setting.
 
-| | | |
-| --- | --- | --- |
-| ![Home](design-screens/02-home.png) | ![A Penlock share](design-screens/08-share-1.png) | ![MuSig wallet](design-screens/24-wallet-ready.png) |
-
 A 2-minute walkthrough is in [`demo/penlock-demo.mp4`](demo/penlock-demo.mp4), with captions in
 [`demo/penlock-demo.srt`](demo/penlock-demo.srt).
 
@@ -89,7 +85,7 @@ Signing stops if the transaction changes after approval.
 | `resources/` | App icon, fonts and interface icons |
 | `tools/musig-cosigner/` | Laptop cosigner |
 | `vendor/` | Crates patched to compile for KeyOS |
-| `design-screens/` | A capture of every screen, using a public test phrase |
+| `demo/` | The walkthrough video and its captions |
 
 ## Known limits
 
